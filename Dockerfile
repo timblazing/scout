@@ -1,5 +1,6 @@
-# Frontend stage: builds the dashboard into internal/web/dist
-FROM node:22-alpine AS web
+# Frontend stage: builds the dashboard into internal/web/dist. The output is
+# plain HTML/JS/CSS, so it always runs natively on the build machine.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS web
 
 WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
@@ -7,8 +8,12 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-# Build stage
-FROM golang:1.25-alpine AS builder
+# Build stage. Runs natively and cross-compiles for the target architecture,
+# which is far faster than compiling under QEMU emulation.
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
 
 WORKDIR /app
 
@@ -31,7 +36,7 @@ ARG COMMIT=""
 ARG BUILD_DATE=""
 
 # Build binary
-RUN CGO_ENABLED=0 GOOS=linux go build \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} go build \
     -ldflags="-s -w \
       -X 'github.com/291-Group/LAN-Orangutan/internal/cli.Version=${VERSION}' \
       -X 'github.com/291-Group/LAN-Orangutan/internal/cli.Commit=${COMMIT}' \
