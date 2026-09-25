@@ -1,3 +1,12 @@
+# Frontend stage: builds the dashboard into internal/web/dist
+FROM node:22-alpine AS web
+
+WORKDIR /app/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
 # Build stage
 FROM golang:1.25-alpine AS builder
 
@@ -10,8 +19,9 @@ RUN apk add --no-cache git
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source
+# Copy source, then the built dashboard for go:embed
 COPY . .
+COPY --from=web /app/internal/web/dist ./internal/web/dist
 
 # Version details, supplied by the release workflow. Without these the image
 # reports whatever it can work out from the repository, which for a build
@@ -66,13 +76,10 @@ EXPOSE 291
 
 # Health check.
 #
-# Targets a static asset over 127.0.0.1: it is served without authentication and
-# returns 200 in every state (before setup, after a password is set, signed out),
-# so the check reflects "is the server up" rather than "is it unlocked". Uses
-# 127.0.0.1 rather than localhost because the server binds IPv4 and localhost can
-# resolve to IPv6 ::1.
+# Uses 127.0.0.1 rather than localhost because the server binds IPv4 and
+# localhost can resolve to IPv6 ::1.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:291/static/orangutan.svg || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:${ORANGUTAN_PORT:-291}/favicon.svg || exit 1
 
 ENTRYPOINT ["orangutan"]
 CMD ["serve"]

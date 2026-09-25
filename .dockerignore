@@ -9,10 +9,15 @@ bin/
 orangutan
 *.exe
 
+# Frontend deps and output are rebuilt inside the image
+web/node_modules/
+internal/web/dist/
+
 # Local data and editor state
 data/
 *.log
 .claude/
+.playwright-mcp/
 .vscode/
 .idea/
 

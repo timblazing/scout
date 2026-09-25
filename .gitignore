@@ -4,8 +4,15 @@ orangutan-*
 *.exe
 
 # Data
-*.json
-!package.json
+/data/
+devices.json
+scan_state.json
+
+# Frontend
+web/node_modules/
+internal/web/dist/*
+!internal/web/dist/.gitkeep
+.playwright-mcp/
 
 # Config with secrets
 config.ini

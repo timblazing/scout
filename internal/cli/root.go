@@ -18,10 +18,10 @@ var (
 // rootCmd represents the base command
 var rootCmd = &cobra.Command{
 	Use:   "orangutan",
-	Short: "LAN Orangutan - Network Discovery Tool",
-	Long: `LAN Orangutan is a network discovery and monitoring tool.
+	Short: "Scout - Network Discovery Tool",
+	Long: `Scout is a network discovery and monitoring tool.
 It scans your local network to find devices and provides
-a web interface for viewing and managing discovered devices.`,
+a web dashboard for viewing them.`,
 
 	// Execute prints errors itself; without this cobra prints them a second
 	// time.

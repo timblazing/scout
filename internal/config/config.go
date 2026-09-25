@@ -178,9 +178,8 @@ func Default() *Config {
 		Server: ServerConfig{
 			Port: 291,
 			// Reachable from the network, because this is usually installed on
-			// a server or a Pi and opened from another machine. Safety comes
-			// from RequiresSetup: with no password set, the only thing a
-			// visitor can reach is the page that creates one.
+			// a server or a Pi and opened from another machine. The dashboard
+			// has no login, so keep it on a trusted network.
 			BindAddress:  "0.0.0.0",
 			EnableAPI:    true,
 			SessionHours: 24 * 7,

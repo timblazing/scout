@@ -79,6 +79,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path = strings.TrimSuffix(path, "/")
 
 	switch {
+	case path == "overview":
+		h.handleOverview(w, r)
 	case path == "devices":
 		h.handleDevices(w, r)
 	case path == "device":

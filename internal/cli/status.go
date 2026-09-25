@@ -20,7 +20,7 @@ var statusCmd = &cobra.Command{
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
-	fmt.Println("=== LAN Orangutan Status ===")
+	fmt.Println("=== Scout Status ===")
 	fmt.Println()
 
 	// System info

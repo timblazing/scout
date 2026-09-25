@@ -16,30 +16,26 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/291-Group/LAN-Orangutan/internal/api"
-	"github.com/291-Group/LAN-Orangutan/internal/auth"
 	"github.com/291-Group/LAN-Orangutan/internal/network"
 	"github.com/291-Group/LAN-Orangutan/internal/storage"
 	"github.com/291-Group/LAN-Orangutan/internal/web"
 )
 
 var (
-	servePort          int
-	serveBind          string
-	serveAllowInsecure bool
+	servePort int
+	serveBind string
 )
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the web server",
-	Long:  `Start the LAN Orangutan web server with REST API and dashboard.`,
+	Long:  `Start the Scout web server with REST API and dashboard.`,
 	RunE:  runServe,
 }
 
 func init() {
 	serveCmd.Flags().IntVarP(&servePort, "port", "p", 0, "Port to listen on (default from config)")
 	serveCmd.Flags().StringVarP(&serveBind, "bind", "b", "", "Address to bind to (default from config)")
-	serveCmd.Flags().BoolVar(&serveAllowInsecure, "allow-insecure", false,
-		"Permit binding to the network without a password (not recommended)")
 }
 
 func runServe(cmd *cobra.Command, args []string) error {
@@ -65,9 +61,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Flags win over the config file and environment.
 	cfg.Server.BindAddress = bind
-	if serveAllowInsecure {
-		cfg.Server.AllowInsecure = true
-	}
 
 	// Initialize storage
 	store, err := storage.New(cfg.DevicesFile(), cfg.StateFile())
@@ -75,24 +68,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
 
-	// A password from the config file or environment wins. Otherwise fall back
-	// to one created earlier through the setup page.
-	password := cfg.Server.Password
-	if password == "" {
-		password = auth.LoadHash(cfg.PasswordFile())
-		cfg.Server.Password = password
-	}
-
-	authn, err := auth.New(password, cfg.SessionTTL())
-	if err != nil {
-		return fmt.Errorf("failed to set up authentication: %w", err)
-	}
-	authn.SetSetupRequired(cfg.RequiresSetup())
-
 	// Create HTTP handler
 	mux := http.NewServeMux()
 
-	webHandler := web.NewHandler(store, cfg, authn, Version)
+	webHandler := web.NewHandler()
 	apiHandler := api.NewHandler(store, cfg)
 
 	// Keep the device list current on its own: re-scan the detected networks
@@ -107,18 +86,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	apiHandler.SetScanContext(scanCtx)
 	apiHandler.StartBackgroundScanner(scanCtx, time.Duration(cfg.Scanning.ScanInterval)*time.Second)
 
-	// Protected routes.
-	mux.Handle("/api/", authn.Middleware(apiHandler))
-	mux.Handle("/", authn.Middleware(webHandler))
-
-	// Public routes. Static assets stay open so the login and setup pages can
-	// style themselves, and those forms must be reachable while signed out.
-	mux.Handle("/static/", webHandler.StaticHandler())
-	mux.HandleFunc(auth.LoginPath, webHandler.HandleLogin)
-	mux.HandleFunc(auth.LogoutPath, webHandler.HandleLogout)
-	mux.HandleFunc(auth.SetupPath, webHandler.HandleSetup(func(hash string) error {
-		return auth.SaveHash(cfg.PasswordFile(), hash)
-	}))
+	mux.Handle("/api/", apiHandler)
+	mux.Handle("/", webHandler)
 
 	// Create server. JoinHostPort rather than "host:port": an IPv6 address
 	// contains colons of its own and has to be bracketed.
@@ -178,7 +147,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		close(done)
 	}()
 
-	fmt.Printf("Starting LAN Orangutan server on http://%s\n", addr)
+	fmt.Printf("Starting Scout server on http://%s\n", addr)
 
 	// Be explicit about who can reach this and whether it is protected, so
 	// nobody has to guess at their own exposure.
@@ -198,17 +167,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	switch {
-	case authn.NeedsSetup():
-		fmt.Println("Password:       not set yet, open the page above to create one")
-	case authn.Enabled():
-		fmt.Println("Password:       required")
-	case cfg.IsLoopbackBind():
-		fmt.Println("Password:       not set (not needed while local only)")
-	default:
-		fmt.Println("Password:       NOT SET, and this server is exposed to the network")
-	}
-
 	// A container attached to Docker's own network cannot see the LAN, and the
 	// virtual gateway answers probes for addresses that do not exist. Say so
 	// before the user runs a scan and trusts the results.
@@ -226,7 +184,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			fmt.Println()
 			fmt.Println("  Linux:           use host networking (see docker-compose.yml)")
 			fmt.Println("  macOS / Windows: Docker cannot reach your LAN at all.")
-			fmt.Println("                   Run LAN Orangutan directly instead.")
+			fmt.Println("                   Run Scout directly instead.      ")
 			fmt.Println()
 		}
 	}
@@ -259,8 +217,7 @@ func isAddrInUse(err error) bool {
 //
 // It applies to loopback binds only. On a network bind the Host is legitimately
 // the server's LAN address or hostname, which cannot be enumerated here; that
-// mode is protected instead by the password and the SameSite=Lax cookie, which
-// a rebound cross-site request does not carry.
+// mode relies on the API's JSON-only CSRF check for anything that mutates.
 func guardHost(loopbackBind bool, next http.Handler) http.Handler {
 	if !loopbackBind {
 		return next

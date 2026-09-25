@@ -50,6 +50,22 @@ jobs:
       - name: Test
         run: go test -v -race ./...
 
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Type-check and build dashboard
+        run: cd web && npm ci && npm run build
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:
@@ -70,7 +86,7 @@ jobs:
       # The Docker image is the primary install route, so a broken Dockerfile
       # should fail the build rather than be discovered at release time.
       - name: Build image
-        run: docker build -t lan-orangutan:ci .
+        run: docker build -t scout:ci .
 
       - name: Check the binary runs in the image
-        run: docker run --rm lan-orangutan:ci version
+        run: docker run --rm scout:ci version

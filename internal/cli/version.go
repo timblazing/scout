@@ -125,7 +125,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("LAN Orangutan %s\n", Version)
+		fmt.Printf("Scout %s\n", Version)
 		fmt.Printf("  Commit: %s\n", Commit)
 		fmt.Printf("  Built: %s\n", BuildDate)
 		fmt.Printf("  Go: %s\n", runtime.Version())

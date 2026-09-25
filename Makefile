@@ -1,4 +1,4 @@
-# LAN Orangutan Makefile
+# Scout Makefile
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -12,16 +12,25 @@ LDFLAGS := -ldflags "-s -w \
 BINARY := orangutan
 BUILD_DIR := bin
 
-.PHONY: all build clean test lint install
+.PHONY: all build web web-dev clean test lint install
 
 all: build
 
+# Build the dashboard into internal/web/dist, where go:embed picks it up
+web:
+	cd web && npm ci && npm run build
+
+# Run the dashboard with hot reload, proxying /api to a server on :291
+# (override with SCOUT_API=http://host:port)
+web-dev:
+	cd web && npm run dev
+
 # Build for current platform
-build:
+build: web
 	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY) ./cmd/orangutan
 
 # Build for all platforms
-build-all: build-linux build-darwin build-windows
+build-all: web build-linux build-darwin build-windows
 
 # Linux builds
 build-linux: build-linux-amd64 build-linux-arm64 build-linux-arm
@@ -105,8 +114,10 @@ release: build-all checksums
 	done
 
 help:
-	@echo "LAN Orangutan Build Targets:"
+	@echo "Scout Build Targets:"
 	@echo ""
+	@echo "  web            - Build the dashboard"
+	@echo "  web-dev        - Run the dashboard dev server"
 	@echo "  build          - Build for current platform"
 	@echo "  build-all      - Build for all platforms"
 	@echo "  build-linux    - Build for Linux (amd64, arm64, arm)"

@@ -105,7 +105,7 @@ func IsolationWarning(detected []types.Network) string {
 	}
 	return "This container can only see Docker's own network, not your LAN. " +
 		"Scans will miss your real devices and may report devices that do not exist. " +
-		"Use host networking on Linux, or run LAN Orangutan directly on macOS and Windows."
+		"Use host networking on Linux, or run Scout directly on macOS and Windows."
 }
 
 // ExcludeContainerNetworks drops container bridge networks (Docker, Podman) from
