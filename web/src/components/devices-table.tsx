@@ -14,7 +14,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DeviceIcon } from "@/components/device-icon"
 import type { Device, DeviceStatus } from "@/lib/api"
-import { displayName, ipKey, timeAgo } from "@/lib/format"
+import { deviceName, vendorLabel } from "@/lib/device"
+import { ipKey, timeAgo } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 type SortKey = "status" | "name" | "ip" | "mac" | "vendor" | "last_seen"
@@ -38,13 +39,13 @@ function compare(a: Device, b: Device, key: SortKey): number {
     case "status":
       return statusRank[a.status] - statusRank[b.status] || ipKey(a.ip) - ipKey(b.ip)
     case "name":
-      return displayName(a).localeCompare(displayName(b)) || ipKey(a.ip) - ipKey(b.ip)
+      return deviceName(a).text.localeCompare(deviceName(b).text) || ipKey(a.ip) - ipKey(b.ip)
     case "ip":
       return ipKey(a.ip) - ipKey(b.ip) || a.ip.localeCompare(b.ip)
     case "mac":
       return a.mac.localeCompare(b.mac)
     case "vendor":
-      return a.vendor.localeCompare(b.vendor) || ipKey(a.ip) - ipKey(b.ip)
+      return vendorLabel(a).text.localeCompare(vendorLabel(b).text) || ipKey(a.ip) - ipKey(b.ip)
     case "last_seen":
       return new Date(b.last_seen).getTime() - new Date(a.last_seen).getTime()
   }
@@ -64,7 +65,7 @@ export function DevicesTable({ devices, query, now }: DevicesTableProps) {
     const q = query.trim().toLowerCase()
     const filtered = q
       ? devices.filter((d) =>
-          [d.ip, d.mac, d.hostname, d.label, d.vendor, d.type ?? ""].some((v) =>
+          [d.ip, d.mac, d.hostname, d.label, d.vendor, d.type ?? "", deviceName(d).text].some((v) =>
             v.toLowerCase().includes(q)
           )
         )
@@ -125,7 +126,8 @@ export function DevicesTable({ devices, query, now }: DevicesTableProps) {
           )}
 
           {rows?.map((d) => {
-            const name = displayName(d)
+            const name = deviceName(d)
+            const vendor = vendorLabel(d)
             return (
               <TableRow key={d.ip} className={cn(d.status === "offline" && "text-muted-foreground")}>
                 <TableCell className="pl-4">
@@ -141,13 +143,20 @@ export function DevicesTable({ devices, query, now }: DevicesTableProps) {
 
                 <TableCell>
                   <div className="flex items-center gap-2.5">
-                    <DeviceIcon type={d.type} className="size-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <div className={cn("truncate", !name && "text-muted-foreground")}>
-                        {name || "Unknown"}
-                      </div>
-                      {d.type && <div className="text-xs text-muted-foreground">{d.type}</div>}
-                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="shrink-0" aria-label={d.type || "Unknown type"}>
+                          <DeviceIcon type={d.type} className="size-4 text-muted-foreground" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>{d.type || "Unknown type"}</TooltipContent>
+                    </Tooltip>
+                    <span
+                      className={cn("min-w-0 truncate", name.derived && "text-muted-foreground")}
+                      title={name.full}
+                    >
+                      {name.text}
+                    </span>
                     <RowFlags device={d} />
                   </div>
                 </TableCell>
@@ -171,8 +180,14 @@ export function DevicesTable({ devices, query, now }: DevicesTableProps) {
                   {d.mac || "—"}
                 </TableCell>
 
-                <TableCell className="hidden max-w-56 truncate text-muted-foreground lg:table-cell">
-                  {d.vendor || "—"}
+                <TableCell
+                  className={cn(
+                    "hidden max-w-56 truncate text-muted-foreground lg:table-cell",
+                    vendor.muted && "text-muted-foreground/60"
+                  )}
+                  title={vendor.muted && d.mac ? "Randomized MAC address; the manufacturer can't be identified" : undefined}
+                >
+                  {vendor.text}
                 </TableCell>
 
                 <TableCell

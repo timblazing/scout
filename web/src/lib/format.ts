@@ -19,7 +19,3 @@ export function ipKey(ip: string): number {
   if (parts.length !== 4) return Number.MAX_SAFE_INTEGER
   return parts.reduce((acc, p) => acc * 256 + (Number(p) || 0), 0)
 }
-
-export function displayName(d: { label: string; hostname: string }): string {
-  return d.label || d.hostname || ""
-}
