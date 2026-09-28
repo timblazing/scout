@@ -18,7 +18,7 @@ func TestDeviceMovingIPIsTrackedByMAC(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpdateDeviceFields("192.168.1.10", strptr("File Server"), strptr("rack 1"), strptr("Infra")); err != nil {
+	if err := s.UpdateDeviceFields("192.168.1.10", strptr("File Server"), strptr("rack 1"), strptr("Infra"), strptr("dashboard:synology")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -37,7 +37,7 @@ func TestDeviceMovingIPIsTrackedByMAC(t *testing.T) {
 	if moved == nil {
 		t.Fatal("the device should now be at the new IP")
 	}
-	if moved.Label != "File Server" || moved.Notes != "rack 1" || moved.Group != "Infra" {
+	if moved.Label != "File Server" || moved.Notes != "rack 1" || moved.Group != "Infra" || moved.Icon != "dashboard:synology" {
 		t.Errorf("user data did not move with the device: %+v", moved)
 	}
 	if moved.Type != "Server" {

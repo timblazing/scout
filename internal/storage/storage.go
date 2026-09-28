@@ -201,6 +201,9 @@ func (s *Storage) UpdateDevice(device *types.Device) error {
 		if device.Label == "" {
 			device.Label = existing.Label
 		}
+		if device.Icon == "" {
+			device.Icon = existing.Icon
+		}
 		if device.Notes == "" {
 			device.Notes = existing.Notes
 		}
@@ -217,7 +220,7 @@ func (s *Storage) UpdateDevice(device *types.Device) error {
 }
 
 // UpdateDeviceFields updates specific fields of a device
-func (s *Storage) UpdateDeviceFields(ip string, label, notes, group *string) error {
+func (s *Storage) UpdateDeviceFields(ip string, label, notes, group, icon *string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -225,18 +228,27 @@ func (s *Storage) UpdateDeviceFields(ip string, label, notes, group *string) err
 	if !ok {
 		return fmt.Errorf("device not found: %s", ip)
 	}
+	updated := *device
 
 	if label != nil {
-		device.Label = *label
+		updated.Label = *label
 	}
 	if notes != nil {
-		device.Notes = *notes
+		updated.Notes = *notes
 	}
 	if group != nil {
-		device.Group = *group
+		updated.Group = *group
+	}
+	if icon != nil {
+		updated.Icon = *icon
 	}
 
-	return s.saveDevices()
+	s.devices[ip] = &updated
+	if err := s.saveDevices(); err != nil {
+		s.devices[ip] = device
+		return err
+	}
+	return nil
 }
 
 // DeleteDevice removes a device by IP
@@ -394,6 +406,7 @@ func (s *Storage) addNewDeviceLocked(d *types.Device, now time.Time) {
 	if d.MAC != "" {
 		if oldIP, old := s.findByMACLocked(d.MAC, d.IP); old != nil {
 			d.Label = old.Label
+			d.Icon = old.Icon
 			d.Notes = old.Notes
 			d.Group = old.Group
 			d.FirstSeen = old.FirstSeen

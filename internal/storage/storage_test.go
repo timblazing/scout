@@ -22,6 +22,33 @@ func newTestStorage(t *testing.T) *Storage {
 	return s
 }
 
+func TestDeviceNameAndIconSurviveScanAndRestart(t *testing.T) {
+	dir := t.TempDir()
+	devicesFile := filepath.Join(dir, "devices.json")
+	stateFile := filepath.Join(dir, "state.json")
+	s, err := New(devicesFile, stateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MergeDevices([]types.Device{{IP: "192.168.1.4", MAC: "00:1A:2B:3C:4D:5E"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateDeviceFields("192.168.1.4", strptr("Office router"), nil, nil, strptr("dashboard:tp-link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MergeDevices([]types.Device{{IP: "192.168.1.4", MAC: "00:1A:2B:3C:4D:5E", Hostname: "router"}}); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := New(devicesFile, stateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := reopened.GetDevice("192.168.1.4")
+	if got.Label != "Office router" || got.Icon != "dashboard:tp-link" {
+		t.Fatalf("saved customization was lost: %+v", got)
+	}
+}
+
 func TestMostRecentScanIsZeroBeforeAnyScan(t *testing.T) {
 	s := newTestStorage(t)
 

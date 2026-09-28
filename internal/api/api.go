@@ -184,6 +184,7 @@ func (h *Handler) handleDevice(w http.ResponseWriter, r *http.Request) {
 			Label *string `json:"label"`
 			Notes *string `json:"notes"`
 			Group *string `json:"group"`
+			Icon  *string `json:"icon"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			h.error(w, http.StatusBadRequest, "invalid JSON")
@@ -200,8 +201,23 @@ func (h *Handler) handleDevice(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := h.store.UpdateDeviceFields(ip, req.Label, req.Notes, req.Group); err != nil {
-			h.error(w, http.StatusNotFound, err.Error())
+		if req.Icon != nil && *req.Icon != "" && !validDeviceIcon(*req.Icon) {
+			h.error(w, http.StatusBadRequest, "invalid icon")
+			return
+		}
+		if req.Label != nil {
+			*req.Label = strings.TrimSpace(*req.Label)
+			if len(*req.Label) > 120 {
+				h.error(w, http.StatusBadRequest, "name is too long")
+				return
+			}
+		}
+		if h.store.GetDevice(ip) == nil {
+			h.error(w, http.StatusNotFound, "device not found")
+			return
+		}
+		if err := h.store.UpdateDeviceFields(ip, req.Label, req.Notes, req.Group, req.Icon); err != nil {
+			h.error(w, http.StatusInternalServerError, "failed to save device")
 			return
 		}
 		h.success(w, map[string]string{"message": "device updated"})
@@ -221,6 +237,19 @@ func (h *Handler) handleDevice(w http.ResponseWriter, r *http.Request) {
 	default:
 		h.error(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func validDeviceIcon(icon string) bool {
+	parts := strings.SplitN(icon, ":", 2)
+	if len(parts) != 2 || (parts[0] != "dashboard" && parts[0] != "lucide") || len(parts[1]) == 0 || len(parts[1]) > 80 {
+		return false
+	}
+	for _, r := range parts[1] {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // handleNetworks handles GET /api/networks

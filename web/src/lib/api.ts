@@ -6,6 +6,7 @@ export interface Device {
   hostname: string
   vendor: string
   type?: string
+  icon?: string
   web_ui?: boolean
   risks?: string[]
   label: string
@@ -55,6 +56,13 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const getOverview = () => request<Overview>("/api/overview")
+
+export const updateDevice = (ip: string, fields: { label?: string; icon?: string }) =>
+  request<unknown>("/api/device", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ip, ...fields }),
+  })
 
 // The API rejects mutating requests that are not JSON, as CSRF protection.
 export const startScan = () =>

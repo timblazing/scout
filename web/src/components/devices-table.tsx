@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { ArrowDown, ArrowUp, ShieldAlert, ArrowRightLeft, Globe, Circle } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -13,7 +14,8 @@ import {
 } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DeviceIcon } from "@/components/device-icon"
-import type { Device, DeviceStatus } from "@/lib/api"
+import { IconPicker } from "@/components/icon-picker"
+import { updateDevice, type Device, type DeviceStatus, type Overview } from "@/lib/api"
 import { deviceName, vendorLabel } from "@/lib/device"
 import { ipKey, timeAgo } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -28,11 +30,7 @@ const statusDot: Record<DeviceStatus, string> = {
   offline: "bg-zinc-600",
 }
 
-const statusLabel: Record<DeviceStatus, string> = {
-  online: "Online · seen in the last 5 minutes",
-  seen: "Idle · seen in the last hour",
-  offline: "Offline",
-}
+const statusLabel: Record<DeviceStatus, string> = { online: "Online", seen: "Idle", offline: "Offline" }
 
 function compare(a: Device, b: Device, key: SortKey): number {
   switch (key) {
@@ -131,37 +129,18 @@ export function DevicesTable({ devices, query, now, filter, unavailable, onReset
           )}
 
           {rows?.map((d) => {
-            const name = deviceName(d)
             const vendor = vendorLabel(d)
             return (
               <TableRow key={d.ip} className={cn(d.status === "offline" && "text-muted-foreground")}>
                 <TableCell className="pl-4">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span tabIndex={0} className="flex size-4 items-center justify-center" aria-label={statusLabel[d.status]}>
-                        <span className={cn("size-2 rounded-full", statusDot[d.status])} />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>{statusLabel[d.status]}</TooltipContent>
-                  </Tooltip>
+                  <span role="img" className="flex size-4 items-center justify-center" aria-label={statusLabel[d.status]}>
+                    <span className={cn("size-2 rounded-full", statusDot[d.status])} />
+                  </span>
                 </TableCell>
 
                 <TableCell className="max-w-0 w-full md:w-auto md:max-w-80">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span tabIndex={0} className="shrink-0" aria-label={d.type || "Unknown type"}>
-                          <DeviceIcon type={d.type} className="size-4 text-muted-foreground" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>{d.type || "Unknown type"}</TooltipContent>
-                    </Tooltip>
-                    <span
-                      className={cn("min-w-0 truncate", name.derived && "text-muted-foreground")}
-                      title={name.full}
-                    >
-                      {name.text}
-                    </span>
+                    <DeviceIdentity device={d} />
                     <RowFlags device={d} />
                   </div>
                 </TableCell>
@@ -208,6 +187,67 @@ export function DevicesTable({ devices, query, now, filter, unavailable, onReset
       </Table>
     </div>
   )
+}
+
+function DeviceIdentity({ device }: { device: Device }) {
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState("")
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [error, setError] = useState("")
+  const cancelled = useRef(false)
+  const name = deviceName(device)
+  const save = useMutation({
+    mutationFn: (fields: { label?: string; icon?: string }) => updateDevice(device.ip, fields),
+    onMutate: (fields) => {
+      setError("")
+      const previous = queryClient.getQueryData<Overview>(["overview"])
+      queryClient.setQueryData<Overview>(["overview"], (current) => current && ({
+        ...current,
+        devices: current.devices.map((row) => row.ip === device.ip ? { ...row, ...fields } : row),
+      }))
+      return { previous }
+    },
+    onError: (failure, _fields, context) => {
+      if (context?.previous) queryClient.setQueryData(["overview"], context.previous)
+      setError(failure.message)
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["overview"] }),
+  })
+
+  const commitName = () => {
+    if (cancelled.current) { cancelled.current = false; return }
+    setEditing(false)
+    const label = draft.trim()
+    if (label !== device.label) save.mutate({ label })
+  }
+
+  return <>
+    <button type="button" aria-label={`Change icon for ${name.text}`} onClick={() => setPickerOpen(true)} className="flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+      <DeviceIcon device={device} className="size-4 object-contain text-muted-foreground" />
+    </button>
+    {editing ? <input
+      autoFocus
+      value={draft}
+      maxLength={120}
+      aria-label={`Rename ${name.text}`}
+      onFocus={(event) => event.currentTarget.select()}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commitName}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur()
+        if (event.key === "Escape") { cancelled.current = true; setEditing(false) }
+      }}
+      className="h-8 min-w-0 flex-1 rounded-md border border-ring bg-background px-2 text-sm text-foreground outline-none"
+    /> : <button
+      type="button"
+      title={name.full}
+      onClick={() => { cancelled.current = false; setDraft(name.text); setEditing(true) }}
+      className={cn("min-w-0 truncate rounded-sm text-left hover:underline hover:underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring", name.derived && "text-muted-foreground")}
+    >{name.text}</button>}
+    {error && <span role="alert" className="max-w-32 truncate text-xs text-red-400" title={error}>Could not save</span>}
+    <IconPicker open={pickerOpen} onOpenChange={setPickerOpen} selected={device.icon} deviceName={name.text} onSelect={(icon) => { setPickerOpen(false); if (icon !== (device.icon ?? "")) save.mutate({ icon }) }} />
+  </>
 }
 
 function RowFlags({ device: d }: { device: Device }) {

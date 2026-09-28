@@ -20,8 +20,10 @@ type Device struct {
 	// Risks lists security concerns found during an opt-in service probe, such as
 	// an exposed unencrypted service. Empty when nothing notable was found or the
 	// probe is off.
-	Risks        []string  `json:"risks,omitempty"`
-	Label        string    `json:"label"`
+	Risks []string `json:"risks,omitempty"`
+	Label string   `json:"label"`
+	// Icon is an optional user-selected icon, e.g. "dashboard:raspberry-pi".
+	Icon         string    `json:"icon,omitempty"`
 	Notes        string    `json:"notes"`
 	Group        string    `json:"group"`
 	FirstSeen    time.Time `json:"first_seen"`
