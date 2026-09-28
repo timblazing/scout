@@ -75,7 +75,7 @@ The searchable Dashboard Icons catalog is bundled with the frontend, so searchin
 
 ## Releasing
 
-Push a `v*` tag. The release workflow builds binaries and publishes a multi-arch image to `ghcr.io/<owner>/scout`. Releases include native binary archives and a Linux installer bundle; distro packages and package-manager manifests are not published. After the first publish, set the package to public under GitHub → Packages → scout → Settings, or run `docker login ghcr.io` on the host.
+Each push to `main` runs CI, then publishes a multi-arch image to `ghcr.io/<owner>/scout:latest` and a `sha-<commit>` tag after all checks pass. Push a `v*` tag to build versioned binaries and publish a versioned image. Releases include native binary archives and a Linux installer bundle; distro packages and package-manager manifests are not published. After the first publish, set the package to public under GitHub → Packages → scout → Settings, or run `docker login ghcr.io` on the host.
 
 ## License
 
