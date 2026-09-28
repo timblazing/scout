@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { ArrowDown, ArrowUp, ShieldAlert, ArrowRightLeft, Globe } from "lucide-react"
+import { ArrowDown, ArrowUp, ShieldAlert, ArrowRightLeft, Globe, Circle } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -47,17 +47,20 @@ function compare(a: Device, b: Device, key: SortKey): number {
     case "vendor":
       return vendorLabel(a).text.localeCompare(vendorLabel(b).text) || ipKey(a.ip) - ipKey(b.ip)
     case "last_seen":
-      return new Date(b.last_seen).getTime() - new Date(a.last_seen).getTime()
+      return new Date(a.last_seen).getTime() - new Date(b.last_seen).getTime()
   }
 }
 
 interface DevicesTableProps {
+  filter: "all" | "online" | "offline"
+  unavailable: boolean
+  onReset: () => void
   devices?: Device[]
   query: string
   now: number
 }
 
-export function DevicesTable({ devices, query, now }: DevicesTableProps) {
+export function DevicesTable({ devices, query, now, filter, unavailable, onReset }: DevicesTableProps) {
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "ip", desc: false })
 
   const rows = useMemo(() => {
@@ -81,13 +84,14 @@ export function DevicesTable({ devices, query, now }: DevicesTableProps) {
       <TableHead className={className} aria-sort={active ? (sort.desc ? "descending" : "ascending") : "none"}>
         <button
           type="button"
+          aria-label={`Sort by ${label || "status"}`}
           onClick={() => setSort({ key, desc: active ? !sort.desc : false })}
           className={cn(
-            "inline-flex items-center gap-1 text-xs font-medium transition-colors hover:text-foreground",
+            "inline-flex min-h-10 items-center gap-1 rounded-sm text-xs font-medium transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground",
             active ? "text-foreground" : "text-muted-foreground"
           )}
         >
-          {label}
+          {label || <Circle className="size-3" aria-hidden="true" />}
           <Arrow className={cn("size-3", !active && "invisible", !label && "hidden")} />
         </button>
       </TableHead>
@@ -96,7 +100,7 @@ export function DevicesTable({ devices, query, now }: DevicesTableProps) {
 
   return (
     <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
-      <Table>
+      <Table aria-label="Network devices">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             {header("status", "", "w-10 pl-4")}
@@ -108,7 +112,7 @@ export function DevicesTable({ devices, query, now }: DevicesTableProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows === undefined &&
+          {rows === undefined && !unavailable &&
             Array.from({ length: 6 }, (_, i) => (
               <TableRow key={i} className="hover:bg-transparent">
                 <TableCell colSpan={6} className="px-4">
@@ -117,10 +121,11 @@ export function DevicesTable({ devices, query, now }: DevicesTableProps) {
               </TableRow>
             ))}
 
-          {rows?.length === 0 && (
+          {(rows?.length === 0 || unavailable) && (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={6} className="h-32 text-center text-sm text-muted-foreground">
-                {query ? "No devices match your search." : "No devices yet. Run a scan to discover your network."}
+              <TableCell colSpan={6} className="h-32 whitespace-normal px-4 text-center text-sm text-muted-foreground">
+                {unavailable ? "Devices will appear when Scout reconnects." : query.trim() ? "No devices match your search." : filter !== "all" ? `No ${filter} devices.` : "No devices yet. Run a scan to discover your network."}
+                {!unavailable && (query.trim() || filter !== "all") && <button type="button" onClick={onReset} className="mx-auto mt-2 block rounded-sm px-2 py-1 text-foreground underline underline-offset-4">Clear filters</button>}
               </TableCell>
             </TableRow>
           )}
@@ -133,7 +138,7 @@ export function DevicesTable({ devices, query, now }: DevicesTableProps) {
                 <TableCell className="pl-4">
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="flex size-4 items-center justify-center" aria-label={statusLabel[d.status]}>
+                      <span tabIndex={0} className="flex size-4 items-center justify-center" aria-label={statusLabel[d.status]}>
                         <span className={cn("size-2 rounded-full", statusDot[d.status])} />
                       </span>
                     </TooltipTrigger>
@@ -141,11 +146,11 @@ export function DevicesTable({ devices, query, now }: DevicesTableProps) {
                   </Tooltip>
                 </TableCell>
 
-                <TableCell>
-                  <div className="flex items-center gap-2.5">
+                <TableCell className="max-w-0 w-full md:w-auto md:max-w-80">
+                  <div className="flex min-w-0 items-center gap-2.5">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="shrink-0" aria-label={d.type || "Unknown type"}>
+                        <span tabIndex={0} className="shrink-0" aria-label={d.type || "Unknown type"}>
                           <DeviceIcon type={d.type} className="size-4 text-muted-foreground" />
                         </span>
                       </TooltipTrigger>
@@ -210,11 +215,11 @@ function RowFlags({ device: d }: { device: Device }) {
   if (!d.risks?.length && !moved && !d.web_ui) return null
 
   return (
-    <div className="ml-1 flex items-center gap-1">
+    <div className="ml-1 flex shrink-0 items-center gap-1">
       {d.web_ui && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge variant="outline" className="size-5 p-0 text-muted-foreground">
+            <Badge tabIndex={0} aria-label="Serves a web interface" variant="outline" className="size-5 p-0 text-muted-foreground">
               <Globe />
             </Badge>
           </TooltipTrigger>
@@ -224,7 +229,7 @@ function RowFlags({ device: d }: { device: Device }) {
       {!!d.risks?.length && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge variant="outline" className="size-5 border-red-500/30 p-0 text-red-400">
+            <Badge tabIndex={0} aria-label={d.risks.join(" · ")} variant="outline" className="size-5 border-red-500/30 p-0 text-red-400">
               <ShieldAlert />
             </Badge>
           </TooltipTrigger>
@@ -234,7 +239,7 @@ function RowFlags({ device: d }: { device: Device }) {
       {moved && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge variant="outline" className="size-5 border-amber-500/30 p-0 text-amber-400">
+            <Badge tabIndex={0} aria-label={`Previously at ${moved.ip}`} variant="outline" className="size-5 border-amber-500/30 p-0 text-amber-400">
               <ArrowRightLeft />
             </Badge>
           </TooltipTrigger>

@@ -89,8 +89,8 @@ Or change the port in your config file.
    orangutan serve --bind 0.0.0.0
    ```
 
-   This is the default. The first visit asks you to create a password, so the
-   dashboard is not left open on your network.
+   This is the default. Scout has no authentication: only expose this port to
+   a trusted network, or use an authenticated reverse proxy.
 
 ## Tailscale not detected
 
@@ -105,26 +105,9 @@ Or change the port in your config file.
    /Applications/Tailscale.app/Contents/MacOS/Tailscale status
    ```
 
-3. **Running in Docker? Tailscale will read as "Not Installed."** The container
-   has its own filesystem and cannot see the host's Tailscale, so the status and
-   the connect/disconnect controls are unavailable there even when the host is on
-   your tailnet. Run the binary directly on the host to use Tailscale with LAN
-   Orangutan.
-
-## Connect or disconnect button does nothing
-
-The connect and disconnect buttons run the Tailscale CLI on the machine hosting
-LAN Orangutan, so they need that CLI reachable, the same requirement as detection
-above.
-
-1. **Confirm the CLI works from that machine:** `tailscale status`. If it is not
-   found, the buttons cannot work either.
-2. **Connecting shows a sign-in link instead of connecting.** That is expected
-   when the machine is not signed in yet. Open the link, finish signing in, then
-   refresh the page.
-3. **The disconnect warning is deliberate.** If you reach the dashboard over
-   Tailscale, disconnecting cuts your own connection and you will need local
-   access to bring it back.
+3. **Running in Docker?** The container cannot see the host's Tailscale CLI.
+   Run Scout natively for Tailscale peer discovery. Manage the host's connection
+   with Tailscale itself; Scout does not provide connect/disconnect controls.
 
 ## Rate limiting errors
 
@@ -156,7 +139,7 @@ orangutan version
 
 ## Still having issues?
 
-1. Check the [GitHub Issues](https://github.com/291-Group/LAN-Orangutan/issues)
+1. Check the [GitHub Issues](https://github.com/timblazing/scout/issues)
 2. Open a new issue with:
    - Your OS and version
    - Output of `orangutan version`

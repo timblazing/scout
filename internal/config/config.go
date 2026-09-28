@@ -97,16 +97,10 @@ type ServerConfig struct {
 	BindAddress string
 	EnableAPI   bool
 
-	// Password protects the dashboard and API. Empty means no login is
-	// required. May be given as plaintext or as a bcrypt hash.
-	Password string
-
-	// SessionHours is how long a login stays valid.
-	SessionHours int
-
-	// AllowInsecure permits binding to a non-loopback address without a
-	// password. Off by default: doing so exposes the API, which can modify
-	// stored data, to everyone on the network.
+	// Legacy upstream settings retained for config compatibility only.
+	// Scout does not authenticate dashboard or API requests.
+	Password      string
+	SessionHours  int
 	AllowInsecure bool
 }
 

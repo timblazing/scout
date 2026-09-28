@@ -211,7 +211,7 @@ func isAddrInUse(err error) bool {
 //
 // This closes a DNS rebinding vector. A malicious website can point its own
 // hostname at 127.0.0.1 and, from the victim's browser, reach a dashboard bound
-// to loopback that requires no password because it believed it was private.
+// to loopback that is intended to be private.
 // Such a request arrives with the attacker's hostname in the Host header, never
 // a loopback address, so checking the Host turns it away.
 //

@@ -60,9 +60,8 @@ COPY config.example.ini /etc/lan-orangutan/config.ini
 # Set permissions
 RUN chmod +x /usr/local/bin/orangutan
 
-# The app resolves its data directory from the running user's home, which for
-# this non-root user would not be the volume mounted by docker-compose. Pin it
-# so the mount and the app agree; otherwise data silently vanishes on restart.
+# Pin the data directory so the app and the Compose bind mount agree,
+# independent of the running user's home directory.
 ENV ORANGUTAN_DATA_DIR=/var/lib/lan-orangutan
 
 # Expose port

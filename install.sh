@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Installs LAN Orangutan from a release archive.
+# Installs Scout from a release archive.
 #
 # This installs the single Go binary. Earlier versions installed a Python and
 # PHP application into /opt/lan-orangutan; if that is present it is removed,
@@ -17,7 +17,7 @@ DEFAULT_PORT=291
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 
 echo ""
-echo -e "${YELLOW}LAN Orangutan Installer${NC}"
+echo -e "${YELLOW}Scout Installer${NC}"
 echo "================================"
 echo ""
 
@@ -63,7 +63,7 @@ if [[ -z "$SOURCE_BIN" ]]; then
     echo -e "${RED}✗${NC} Could not find the orangutan binary next to this script."
     echo "   Expected $BIN_NAME or orangutan in $SOURCE_DIR"
     echo "   Download the release for your platform from:"
-    echo "   https://github.com/291-Group/LAN-Orangutan/releases"
+    echo "   https://github.com/timblazing/scout/releases"
     exit 1
 fi
 
@@ -114,16 +114,10 @@ else
     cat > "$CONFIG_DIR/config.ini" << EOF
 [server]
 port = $PORT
-# Reachable from your network. The first time you open the dashboard you will
-# be asked to create a password; nothing is reachable until you do.
+# Scout has no authentication. Only expose it to a trusted network.
 # Set bind_address to 127.0.0.1 instead to keep it to this machine only.
 bind_address = 0.0.0.0
 enable_api = true
-
-# Optional: set a password here to skip the first-run setup screen.
-# password =
-session_hours = 168
-allow_insecure = false
 
 [scanning]
 scan_interval = 300
@@ -168,12 +162,12 @@ IP=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' || hostname -I | aw
 
 echo ""
 echo "========================================"
-echo -e "${GREEN}LAN Orangutan ${NEW_VERSION:-} installed!${NC}"
+echo -e "${GREEN}Scout ${NEW_VERSION:-} installed!${NC}"
 echo "========================================"
 echo ""
 echo -e "Web UI: ${BLUE}http://$IP:$PORT${NC}"
 echo ""
-echo "You will be asked to create a password the first time you open it."
+echo "Scout has no authentication. Keep the dashboard on a trusted network."
 echo ""
 echo "CLI: orangutan scan all"
 echo "     orangutan list"

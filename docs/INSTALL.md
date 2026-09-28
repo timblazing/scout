@@ -1,137 +1,47 @@
-# Installation Guide
+# Install Scout
 
-## Quick Install (Recommended)
+## Docker on Linux
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/291-Group/LAN-Orangutan/releases).
+Use the Compose example in [README.md](../README.md). Host networking lets nmap
+see the LAN directly. Keep the data volume between container upgrades.
 
-### Linux
+Scout has no authentication. Only expose the port to a trusted network or an
+authenticated reverse proxy.
 
-```bash
-# Download and extract
-wget https://github.com/291-Group/LAN-Orangutan/releases/latest/download/orangutan-linux-amd64.tar.gz
-tar xzf orangutan-linux-amd64.tar.gz
+## Native binary
 
-# Run (use sudo for MAC addresses and vendor info)
-sudo ./orangutan serve
+Install nmap, then download your platform's archive from
+[Scout releases](https://github.com/timblazing/scout/releases). Extract it and run
+the included binary, for example `./orangutan-linux-amd64 serve` on Linux or
+`./orangutan-darwin-arm64 serve` on Apple Silicon. Elevated privileges enable
+raw ARP discovery and MAC/vendor identification.
+
+The binary name, `ORANGUTAN_*` environment variables, and configuration/data
+paths remain compatible with upstream. See [config.example.ini](../config.example.ini).
+
+Linux releases also include a `scout-<version>.tar.gz` bundle with native
+binaries and `install.sh` for systemd installation. Review the script before
+running it with sudo. It uses the existing `lan-orangutan` service and paths.
+Scout does not publish distro packages, Homebrew/Scoop manifests, or a Snap.
+
+## Build from source
+
+Install Go 1.25+, Node 22+, and nmap, then:
+
+```sh
+git clone https://github.com/timblazing/scout.git
+cd scout
+make build
+./bin/orangutan serve
 ```
 
-### macOS
+`make build` builds and embeds the dashboard before compiling Go.
 
-```bash
-# Download and extract
-curl -LO https://github.com/291-Group/LAN-Orangutan/releases/latest/download/orangutan-darwin-arm64.tar.gz
-tar xzf orangutan-darwin-arm64.tar.gz
+## Verify
 
-# Run (use sudo for MAC addresses and vendor info)
-sudo ./orangutan serve
+```sh
+./bin/orangutan version
+curl http://localhost:291/api/status
 ```
 
-### Windows
-
-Download `orangutan-windows-amd64.zip` from [GitHub Releases](https://github.com/291-Group/LAN-Orangutan/releases), extract, and run as Administrator.
-
-## Requirements
-
-- **nmap** must be installed:
-  - Linux: `sudo apt install nmap` or `sudo dnf install nmap`
-  - macOS: `brew install nmap`
-  - Windows: Download from [nmap.org](https://nmap.org/download.html)
-
-## Building from Source
-
-```bash
-git clone https://github.com/291-Group/LAN-Orangutan.git
-cd LAN-Orangutan
-go build -o orangutan ./cmd/orangutan
-```
-
-## Running as a Service
-
-### Linux (systemd)
-
-Create `/etc/systemd/system/lan-orangutan.service`:
-
-```ini
-[Unit]
-Description=LAN Orangutan Network Discovery
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/orangutan serve
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Then:
-
-```bash
-sudo cp orangutan /usr/local/bin/
-sudo systemctl daemon-reload
-sudo systemctl enable lan-orangutan
-sudo systemctl start lan-orangutan
-```
-
-### macOS (launchd)
-
-Create `~/Library/LaunchAgents/com.291group.lan-orangutan.plist`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.291group.lan-orangutan</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/local/bin/orangutan</string>
-        <string>serve</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-</dict>
-</plist>
-```
-
-Then:
-
-```bash
-cp orangutan /usr/local/bin/
-launchctl load ~/Library/LaunchAgents/com.291group.lan-orangutan.plist
-```
-
-## Configuration
-
-Config file locations:
-- Linux: `~/.config/lan-orangutan/config.ini` or `/etc/lan-orangutan/config.ini` (as root)
-- macOS: `~/Library/Application Support/lan-orangutan/config.ini`
-- Windows: `%APPDATA%\lan-orangutan\config.ini`
-
-See `config.example.ini` for available options.
-
-## Firewall
-
-Allow port 291 (or your configured port):
-
-```bash
-# Linux (ufw)
-sudo ufw allow 291/tcp
-
-# Linux (firewalld)
-sudo firewall-cmd --add-port=291/tcp --permanent
-sudo firewall-cmd --reload
-```
-
-## Verify Installation
-
-```bash
-orangutan version
-orangutan status
-curl http://localhost:291/setup
-```
+For downloaded binaries, substitute the extracted filename in the version command.

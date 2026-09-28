@@ -6,12 +6,13 @@ import { cn } from "@/lib/utils"
 export type StatusFilter = "all" | "online" | "offline"
 
 interface StatCardsProps {
+  unavailable?: boolean
   data?: Overview
   filter: StatusFilter
   onFilter: (f: StatusFilter) => void
 }
 
-export function StatCards({ data, filter, onFilter }: StatCardsProps) {
+export function StatCards({ data, filter, onFilter, unavailable }: StatCardsProps) {
   const networks = data?.networks.filter((n) => !n.is_tailscale) ?? []
 
   const cards: {
@@ -57,7 +58,7 @@ export function StatCards({ data, filter, onFilter }: StatCardsProps) {
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       {cards.map((c) => {
         const interactive = c.filter !== undefined
-        const active = interactive && filter === c.filter && c.filter !== "all"
+        const active = interactive && filter === c.filter
         return (
           <Card
             key={c.key}
@@ -72,7 +73,7 @@ export function StatCards({ data, filter, onFilter }: StatCardsProps) {
               }
             }}
             className={cn(
-              "gap-1.5 px-4 py-4 transition-colors",
+              "min-w-0 gap-1.5 px-4 py-4 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground",
               interactive && "cursor-pointer select-none hover:bg-accent/40",
               active && "ring-foreground/30"
             )}
@@ -81,14 +82,14 @@ export function StatCards({ data, filter, onFilter }: StatCardsProps) {
               {c.dot && <span className={cn("size-1.5 rounded-full", c.dot)} />}
               {c.label}
             </div>
-            {c.value === undefined ? (
+            {c.value === undefined && !unavailable ? (
               <Skeleton className="h-8 w-12" />
             ) : (
-              <div className="text-2xl font-semibold tracking-tight tabular-nums">{c.value}</div>
+              <div className="text-2xl font-semibold tracking-tight tabular-nums">{c.value ?? "—"}</div>
             )}
-            {data ? (
+            {data || unavailable ? (
               <div className="truncate text-xs text-muted-foreground" title={c.hint}>
-                {c.hint || "none detected"}
+                {unavailable ? "Unavailable" : c.hint || "none detected"}
               </div>
             ) : (
               <Skeleton className="h-4 w-24" />

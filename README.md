@@ -25,7 +25,12 @@ services:
 
 Open `http://<host>:291`. Host networking is required, so this won't work under Docker Desktop on macOS or Windows.
 
-> The dashboard has no authentication. Anyone who can reach the port can see your devices and trigger a scan. Keep it on a trusted network, or put a reverse proxy with auth in front of it.
+> The dashboard has no authentication. Anyone who can reach the port can read and modify device records and trigger scans. Keep it on a trusted network, or put a reverse proxy with auth in front of it.
+
+The image runs as root for raw network discovery. Pre-creating `./data` with
+your user as owner prevents Docker from creating the directory as root, but
+device files are still written by the container as root with owner-only access.
+`PUID` and `PGID` are not supported.
 
 ## Configuration
 
@@ -66,7 +71,7 @@ SCOUT_API=http://10.0.0.5:291 make web-dev   # or proxy to a remote instance
 
 ## Releasing
 
-Push a `v*` tag. The release workflow builds binaries and publishes a multi-arch image to `ghcr.io/<owner>/scout`. After the first publish, set the package to public under GitHub → Packages → scout → Settings, or run `docker login ghcr.io` on the host.
+Push a `v*` tag. The release workflow builds binaries and publishes a multi-arch image to `ghcr.io/<owner>/scout`. Releases include native binary archives and a Linux installer bundle; distro packages and package-manager manifests are not published. After the first publish, set the package to public under GitHub → Packages → scout → Settings, or run `docker login ghcr.io` on the host.
 
 ## License
 

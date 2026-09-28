@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { AlertTriangle, RefreshCw, Search } from "lucide-react"
+import { AlertTriangle, Radar, RefreshCw, Search } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,7 +40,11 @@ export default function App() {
   }, [data, filter])
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-8 sm:px-6 sm:py-12">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-8 sm:px-6 sm:py-10">
+      <header className="mb-2 flex items-center gap-2.5">
+        <Radar className="size-5" strokeWidth={1.5} aria-hidden="true" />
+        <h1 className="text-lg font-semibold tracking-tight">Scout</h1>
+      </header>
       {data?.network_warning && (
         <div className="flex gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-200/90">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-400" />
@@ -49,12 +53,13 @@ export default function App() {
       )}
 
       {overview.isError && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300">
-          Could not reach the Scout server: {overview.error.message}
+        <div role="alert" className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300">
+          Could not reach Scout. {data ? "Showing the last available devices." : "Check that the server is running."}
+          <button type="button" className="ml-2 underline underline-offset-4" onClick={() => void overview.refetch()}>Retry</button>
         </div>
       )}
 
-      <StatCards data={data} filter={filter} onFilter={setFilter} />
+      <StatCards unavailable={overview.isError && !data} data={data} filter={filter} onFilter={setFilter} />
 
       <div className="flex flex-col gap-2 pt-4 sm:flex-row sm:items-center">
         <div className="relative flex-1 sm:max-w-xs">
@@ -68,28 +73,28 @@ export default function App() {
           />
         </div>
         <div className="flex items-center justify-between gap-3 sm:ml-auto">
-          <span className="text-xs text-muted-foreground tabular-nums" title={data?.last_scan && new Date(data.last_scan).toLocaleString()}>
+          <span role="status" className="text-xs text-muted-foreground tabular-nums" title={data?.last_scan && new Date(data.last_scan).toLocaleString()}>
             {scanning ? (
               "Scanning…"
             ) : (
               <>
                 {data?.continuous_scan && (
-                  <span className="mr-1.5 inline-block size-1.5 animate-pulse rounded-full bg-emerald-500 align-middle" />
+                  <span className="mr-1.5 inline-block size-1.5 rounded-full bg-emerald-500 align-middle" />
                 )}
-                Last scan {timeAgo(data?.last_scan, now)}
+                {!data ? (overview.isError ? "Server unavailable" : "Connecting…") : data.last_scan ? `Last scan ${timeAgo(data.last_scan, now)}` : "No scans yet"}
               </>
             )}
           </span>
-          <Button variant="outline" size="sm" onClick={() => scan.mutate()} disabled={scanning}>
-            <RefreshCw className={cn(scanning && "animate-spin")} />
+          <Button variant="outline" size="sm" onClick={() => scan.mutate()} disabled={scanning || !data}>
+            <RefreshCw className={cn(scanning && "motion-safe:animate-spin")} />
             Scan
           </Button>
         </div>
       </div>
 
-      {scan.isError && <p className="text-sm text-red-400">{scan.error.message}</p>}
+      {scan.isError && <p role="alert" className="text-sm text-red-400">{scan.error.message}</p>}
 
-      <DevicesTable devices={devices} query={query} now={now} />
+      <DevicesTable devices={devices} query={query} now={now} filter={filter} unavailable={overview.isError && !data} onReset={() => { setQuery(""); setFilter("all") }} />
     </main>
   )
 }

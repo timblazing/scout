@@ -4,8 +4,8 @@
 # that never sees your real network, so scans report nothing useful there.
 #
 # The dashboard has no login. Anyone who can reach this port can see your
-# device list and start a scan. Keep it on a trusted network, or put a reverse
-# proxy with authentication in front of it.
+# device list, modify device records, and start a scan. Keep it on a trusted
+# network, or put a reverse proxy with authentication in front of it.
 
 services:
   scout:
