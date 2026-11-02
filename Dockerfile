@@ -10,7 +10,7 @@ RUN npm run build
 
 # Build stage. Runs natively and cross-compiles for the target architecture,
 # which is far faster than compiling under QEMU emulation.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -46,8 +46,10 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} GOARM=${TARGETVAR
 # Runtime stage
 FROM alpine:3.24
 
-# Install runtime dependencies
-RUN apk add --no-cache nmap nmap-scripts ca-certificates tzdata
+# Refresh base packages as well as adding runtime dependencies so security
+# fixes already available in Alpine are included in every uncached build.
+RUN apk upgrade --no-cache \
+    && apk add --no-cache nmap nmap-scripts ca-certificates tzdata
 
 
 # Create directories
