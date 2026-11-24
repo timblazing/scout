@@ -1,6 +1,6 @@
 # Scout
 
-A minimal, self-hosted LAN scanner. It runs as one Go binary with an embedded dashboard that lists the devices on your network right now, one row per device, with no logins and no settings pages. It rescans every 60 seconds and drops a device after it misses two scans in a row.
+A minimal, self-hosted LAN scanner. It runs as one Go binary with an embedded dashboard that lists the devices on your network right now, one row per device, with no logins and no settings pages. It rescans every 60 seconds, the page refreshes itself every 10 seconds, and a device drops off the list after it misses two scans in a row.
 
 ![Scout dashboard](docs/screenshot.png)
 
@@ -24,6 +24,8 @@ services:
 ```
 
 Open `http://<host>:291`. Host networking is required, so this won't work under Docker Desktop on macOS or Windows.
+
+Press `/` to jump to the search box, which matches name, IP, MAC and vendor. When service detection is on, devices with a web interface get a globe badge and their IP links straight to it.
 
 Click a device name to rename it, then press Enter or click away to save. Click its icon to choose a device icon or search the Dashboard Icons collection. Names and icon choices are saved in `names.json` under `ORANGUTAN_DATA_DIR` (`./data/names.json` with the Compose volume above) and survive scans and restarts. Names are keyed by MAC address. An existing `devices.json` from an earlier version is imported once the first time Scout starts, then left alone. Scout also matches known vendor and device names to Dashboard Icons automatically; manual choices take precedence. Brand icons load from the [Dashboard Icons jsDelivr CDN](https://github.com/homarr-labs/dashboard-icons#direct-links), so they need browser internet access. Scout falls back to a device icon if an image cannot load.
 
@@ -53,7 +55,7 @@ The `ORANGUTAN_*` names and the data path are kept from upstream. Tailscale addr
 
 ## Development
 
-The project needs Go 1.25+, Node 22+, and nmap.
+The project needs Go 1.26+, Node 22+, and nmap.
 
 ```sh
 make web                              # build the dashboard into internal/web/dist
