@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { ArrowDown, ArrowUp, ShieldAlert, Globe } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpRight, ShieldAlert, Globe } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -68,7 +68,7 @@ export function DevicesTable({ devices, scanning, unavailable, query, onReset }:
           aria-label={`Sort by ${label}`}
           onClick={() => setSort({ key, desc: active ? !sort.desc : false })}
           className={cn(
-            "inline-flex min-h-10 items-center gap-1 rounded-sm text-xs font-medium transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground",
+            "inline-flex min-h-10 items-center gap-1 rounded-sm text-xs font-medium uppercase tracking-wider transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground",
             active ? "text-foreground" : "text-muted-foreground"
           )}
         >
@@ -80,28 +80,34 @@ export function DevicesTable({ devices, scanning, unavailable, query, onReset }:
   }
 
   return (
-    <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+    <div className="overflow-hidden rounded-xl border bg-card">
       <Table aria-label="Network devices">
-        <TableHeader>
+        <TableHeader className="bg-muted/30">
           <TableRow className="hover:bg-transparent">
-            {header("name", "Device", "pl-4")}
-            {header("ip", "IP")}
-            {header("mac", "MAC", "hidden pr-4 md:table-cell")}
+            {header("name", "Device", "pl-5")}
+            {header("ip", "IP address")}
+            {header("mac", "MAC", "hidden pr-5 md:table-cell")}
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows === undefined && !unavailable &&
             Array.from({ length: 6 }, (_, i) => (
               <TableRow key={i} className="hover:bg-transparent">
-                <TableCell colSpan={3} className="px-4">
-                  <Skeleton className="h-5 w-full" />
+                <TableCell colSpan={3} className="h-16 px-5">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="size-8 rounded-md" />
+                    <div className="flex flex-1 flex-col gap-1.5">
+                      <Skeleton className="h-3.5 w-40" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
 
           {(rows?.length === 0 || unavailable) && (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={3} className="h-32 whitespace-normal px-4 text-center text-sm text-muted-foreground">
+              <TableCell colSpan={3} className="h-40 whitespace-normal px-5 text-center text-sm text-muted-foreground">
                 {unavailable
                   ? "Devices will appear when Scout reconnects."
                   : query.trim()
@@ -115,9 +121,9 @@ export function DevicesTable({ devices, scanning, unavailable, query, onReset }:
           )}
 
           {rows?.map((d) => (
-            <TableRow key={d.id}>
-              <TableCell className="max-w-0 w-full pl-4 md:w-auto md:max-w-96">
-                <div className="flex min-w-0 items-center gap-2.5">
+            <TableRow key={d.id} className="group">
+              <TableCell className="h-16 max-w-0 w-full pl-5 md:w-auto md:max-w-96">
+                <div className="flex min-w-0 items-center gap-3">
                   <DeviceIdentity device={d} />
                   <RowFlags device={d} />
                 </div>
@@ -129,16 +135,17 @@ export function DevicesTable({ devices, scanning, unavailable, query, onReset }:
                     href={`http://${d.ip}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="underline-offset-4 hover:underline"
+                    className="inline-flex items-center gap-1 rounded-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
                   >
                     {d.ip}
+                    <ArrowUpRight className="size-3.5 text-muted-foreground transition-colors group-hover:text-foreground" aria-hidden="true" />
                   </a>
                 ) : (
                   d.ip
                 )}
               </TableCell>
 
-              <TableCell className="hidden pr-4 font-mono text-[13px] text-muted-foreground md:table-cell">
+              <TableCell className="hidden pr-5 font-mono text-[13px] text-muted-foreground md:table-cell">
                 {d.mac || "—"}
               </TableCell>
             </TableRow>
@@ -188,7 +195,7 @@ function DeviceIdentity({ device }: { device: Device }) {
   }
 
   return <>
-    <button type="button" aria-label={`Change icon for ${name.text}`} onClick={() => setPickerOpen(true)} className="flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+    <button type="button" aria-label={`Change icon for ${name.text}`} onClick={() => setPickerOpen(true)} className="flex size-8 shrink-0 items-center justify-center rounded-md border bg-background transition-colors hover:border-border-strong hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
       <DeviceIcon device={device} className="size-4 object-contain text-muted-foreground" />
     </button>
     <div className="min-w-0 flex-1">
@@ -209,9 +216,9 @@ function DeviceIdentity({ device }: { device: Device }) {
         type="button"
         title={name.full}
         onClick={() => { cancelled.current = false; setDraft(name.text); setEditing(true) }}
-        className={cn("min-w-0 truncate rounded-sm text-left hover:underline hover:underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring", name.derived && "text-muted-foreground")}
+        className={cn("block max-w-full min-w-0 truncate rounded-sm text-left font-medium hover:underline hover:underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring", name.derived && "font-normal text-muted-foreground")}
       >{name.text}</button>}
-      {detail && <div className="truncate text-xs text-muted-foreground">{detail}</div>}
+      {detail && <div className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</div>}
     </div>
     {error && <span role="alert" className="max-w-32 truncate text-xs text-red-400" title={error}>Could not save</span>}
     <IconPicker open={pickerOpen} onOpenChange={setPickerOpen} selected={device.icon} deviceName={name.text} onSelect={(icon) => { setPickerOpen(false); if (icon !== (device.icon ?? "")) save.mutate({ icon }) }} />
@@ -236,7 +243,7 @@ function RowFlags({ device: d }: { device: Device }) {
       {!!d.risks?.length && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge tabIndex={0} aria-label={d.risks.join(" · ")} variant="outline" className="size-5 border-red-500/30 p-0 text-red-400">
+            <Badge tabIndex={0} aria-label={d.risks.join(" · ")} variant="outline" className="size-5 border-destructive/30 bg-destructive/10 p-0 text-destructive">
               <ShieldAlert />
             </Badge>
           </TooltipTrigger>
