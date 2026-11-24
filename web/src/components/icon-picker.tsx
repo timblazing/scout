@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Dialog } from "radix-ui"
 import { Search, X } from "lucide-react"
 import { lucideIcons } from "@/lib/lucide-icons"
-import { dashboardIcons, dashboardIconUrl, deviceIconNames } from "@/lib/icons"
+import { dashboardIconUrl, deviceIconNames, loadCatalog, useCatalog } from "@/lib/icons"
 
 const featured = ["apple", "raspberry-pi", "tp-link", "ubiquiti", "samsung", "synology", "home-assistant", "docker", "plex", "sonos", "amazon", "google"]
 
@@ -15,13 +15,18 @@ export function IconPicker({ open, onOpenChange, selected, onSelect, deviceName 
 }) {
   const [query, setQuery] = useState("")
   const [tab, setTab] = useState<"devices" | "brands">("devices")
+  const catalog = useCatalog()
+  useEffect(() => {
+    if (open) void loadCatalog()
+  }, [open])
   const search = query.trim().toLowerCase()
   const matches = useMemo(() => {
+    if (!catalog) return []
     if (!search) {
-      return featured.map((slug) => dashboardIcons.find((icon) => icon.slug === slug)).filter((icon) => icon !== undefined)
+      return featured.map((slug) => catalog.bySlug.get(slug)).filter((icon) => icon !== undefined)
     }
-    return dashboardIcons.filter((icon) => [icon.slug, ...icon.aliases].some((name) => name.toLowerCase().includes(search))).slice(0, 120)
-  }, [search])
+    return catalog.icons.filter((icon) => [icon.slug, ...icon.aliases].some((name) => name.toLowerCase().includes(search))).slice(0, 120)
+  }, [catalog, search])
   const devices = deviceIconNames.filter((name) => !search || name.includes(search))
 
   return (
@@ -56,14 +61,15 @@ export function IconPicker({ open, onOpenChange, selected, onSelect, deviceName 
               </div>
             ) : (
               <div role="tabpanel">
-                {!search && <p className="mb-3 text-xs text-muted-foreground">Popular icons · search {dashboardIcons.length.toLocaleString()} available icons</p>}
+                {!search && catalog && <p className="mb-3 text-xs text-muted-foreground">Popular icons · search {catalog.icons.length.toLocaleString()} available icons</p>}
                 <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
                   {matches.map((icon) => <button key={icon.slug} type="button" title={icon.slug.replaceAll("-", " ")} aria-label={icon.slug.replaceAll("-", " ")} aria-pressed={selected === `dashboard:${icon.slug}`} onClick={() => onSelect(`dashboard:${icon.slug}`)} className="flex aspect-square items-center justify-center rounded-lg border border-transparent bg-background/60 p-2.5 hover:border-border hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring aria-pressed:border-ring aria-pressed:bg-accent"><img src={dashboardIconUrl(icon)} alt="" loading="lazy" className="size-8 object-contain" /></button>)}
                 </div>
                 {search && matches.length === 120 && <p className="mt-3 text-xs text-muted-foreground">Showing the first 120 matches. Refine your search to see more.</p>}
               </div>
             )}
-            {(tab === "devices" ? devices.length === 0 : matches.length === 0) && <p className="py-8 text-center text-sm text-muted-foreground">No matching icons. Try another search.</p>}
+            {tab === "brands" && !catalog && <p className="py-8 text-center text-sm text-muted-foreground">Loading icons…</p>}
+            {(tab === "devices" ? devices.length === 0 : !!catalog && matches.length === 0) && <p className="py-8 text-center text-sm text-muted-foreground">No matching icons. Try another search.</p>}
           </div>
           <div className="flex justify-between border-t border-border px-5 py-3">
             <button type="button" onClick={() => onSelect("")} className="rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">Use automatic icon</button>

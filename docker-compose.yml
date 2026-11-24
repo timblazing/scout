@@ -28,8 +28,7 @@ services:
       - TZ=America/Chicago
       # Optional:
       # - ORANGUTAN_NETWORKS=192.168.1.0/24
-      # - ORANGUTAN_SCAN_INTERVAL=300
-      # - ORANGUTAN_CONTINUOUS_SCAN=true
+      # - ORANGUTAN_SCAN_INTERVAL=60
 
     volumes:
       # Device list and scan history. Existing lan-orangutan data works as-is.

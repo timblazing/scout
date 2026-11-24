@@ -41,7 +41,7 @@ make build
 
 ```sh
 ./bin/orangutan version
-curl http://localhost:291/api/status
+curl http://localhost:291/api/devices
 ```
 
 For downloaded binaries, substitute the extracted filename in the version command.

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { Device } from "@/lib/api"
-import { automaticDashboardIcon, dashboardIconFor, dashboardIconUrl, type DeviceIconName } from "@/lib/icons"
+import { automaticDashboardIcon, dashboardIconFor, dashboardIconUrl, useCatalog, type DeviceIconName } from "@/lib/icons"
 import { lucideIcons } from "@/lib/lucide-icons"
 
 const typeIcons: Record<string, DeviceIconName> = {
@@ -11,7 +11,8 @@ const typeIcons: Record<string, DeviceIconName> = {
 
 export function DeviceIcon({ device, className }: { device: Pick<Device, "icon" | "label" | "hostname" | "vendor" | "type">; className?: string }) {
   const [failedUrl, setFailedUrl] = useState("")
-  const chosen = dashboardIconFor(device.icon) ?? (!device.icon ? automaticDashboardIcon(device) : undefined)
+  const catalog = useCatalog()
+  const chosen = catalog && (dashboardIconFor(catalog, device.icon) ?? (!device.icon ? automaticDashboardIcon(catalog, device) : undefined))
   const url = chosen && dashboardIconUrl(chosen)
   if (url && failedUrl !== url) {
     return <img src={url} alt="" className={className} loading="lazy" onError={() => setFailedUrl(url)} />

@@ -19,9 +19,8 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "orangutan",
 	Short: "Scout - Network Discovery Tool",
-	Long: `Scout is a network discovery and monitoring tool.
-It scans your local network to find devices and provides
-a web dashboard for viewing them.`,
+	Long: `Scout scans your local network and shows the devices on it
+in a web dashboard.`,
 
 	// Execute prints errors itself; without this cobra prints them a second
 	// time.
@@ -50,12 +49,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", config.GetDefaultConfigFile(), "config file path")
 
 	// Add subcommands
-	rootCmd.AddCommand(scanCmd)
-	rootCmd.AddCommand(listCmd)
-	rootCmd.AddCommand(statusCmd)
-	rootCmd.AddCommand(networksCmd)
-	rootCmd.AddCommand(exportCmd)
-	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(versionCmd)
 }

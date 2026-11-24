@@ -6,7 +6,6 @@ orangutan-*
 # Data
 /data/
 devices.json
-scan_state.json
 
 # Frontend
 web/node_modules/

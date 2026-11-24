@@ -43,8 +43,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// problem, not a usage error. Report it without the flag listing.
 	cmd.SilenceUsage = true
 
-	// Repair any out-of-range scan timings before they are used, so a config
-	// typo cannot silently switch off the background scanner or rate limiting.
+	// Repair an out-of-range scan interval before it is used, so a config typo
+	// cannot silently switch off the background scanner.
 	for _, note := range cfg.Normalize() {
 		fmt.Fprintf(os.Stderr, "config: %s\n", note)
 	}
@@ -62,8 +62,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Flags win over the config file and environment.
 	cfg.Server.BindAddress = bind
 
-	// Initialize storage
-	store, err := storage.New(cfg.DevicesFile(), cfg.StateFile())
+	// Names and icons are the only thing saved to disk. The first run after an
+	// upgrade imports them from the old devices.json.
+	names, err := storage.OpenNames(cfg.NamesFile(), cfg.DevicesFile())
 	if err != nil {
 		return fmt.Errorf("failed to initialize storage: %w", err)
 	}
@@ -72,18 +73,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 	mux := http.NewServeMux()
 
 	webHandler := web.NewHandler()
-	apiHandler := api.NewHandler(store, cfg)
+	apiHandler := api.NewHandler(storage.NewLive(), names, cfg)
 
-	// Keep the device list current on its own: re-scan the detected networks
-	// every scan_interval seconds. Without this the list only changes when
-	// someone clicks Scan, so "auto-refresh" would only ever re-draw the same
-	// stored results. Cancelling scanCtx at shutdown stops the scheduler and
-	// cancels any scan already in flight. The ticker always runs so continuous
-	// scanning can be switched on and off from the UI at runtime; the scanner
-	// itself skips scans while the setting is off (default comes from config).
+	// The device list is the live result of scanning: scan now, then every
+	// scan_interval seconds. Cancelling scanCtx at shutdown stops the scanner
+	// and any scan in flight.
 	scanCtx, scanCancel := context.WithCancel(context.Background())
 	defer scanCancel()
-	apiHandler.SetScanContext(scanCtx)
 	apiHandler.StartBackgroundScanner(scanCtx, time.Duration(cfg.Scanning.ScanInterval)*time.Second)
 
 	mux.Handle("/api/", apiHandler)
@@ -131,12 +127,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 
 		// scanCancel above cancels the context of any scan in flight, which
-		// kills its nmap child and lets the job return. Wait for that goroutine
-		// to unwind so we do not exit mid-write, bounded so a stuck scan cannot
-		// block shutdown forever.
+		// kills its nmap child and lets the scanner return. Wait for that
+		// goroutine to unwind, bounded so a stuck scan cannot block shutdown
+		// forever.
 		scansDone := make(chan struct{})
 		go func() {
-			apiHandler.WaitForScans()
+			apiHandler.Wait()
 			close(scansDone)
 		}()
 		select {
@@ -169,7 +165,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// A container attached to Docker's own network cannot see the LAN, and the
 	// virtual gateway answers probes for addresses that do not exist. Say so
-	// before the user runs a scan and trusts the results.
+	// before the user trusts the results.
 	if detected, err := network.DetectNetworks(); err == nil {
 		detected = network.WithConfigured(detected, network.Filter{Configured: cfg.Scanning.Networks, Excluded: cfg.Scanning.ExcludeNetworks, OnlyConfigured: cfg.Scanning.OnlyConfiguredNetworks})
 		if warning := network.IsolationWarning(detected); warning != "" {
