@@ -38,7 +38,6 @@ export default function App() {
   }, [])
 
   const count = data?.devices.length
-  const now = useNow(1000)
   const status: Status = list.isError ? "offline" : data?.scanning ? "scanning" : data ? "live" : "connecting"
 
   return (
@@ -64,7 +63,7 @@ export default function App() {
                 ? "Looking for devices on your network…"
                 : <>
                     <span className="text-foreground">{count}</span> {count === 1 ? "device" : "devices"} online
-                    {list.dataUpdatedAt > 0 && <> · updated {ago(now - list.dataUpdatedAt)}</>}
+                    {list.dataUpdatedAt > 0 && <> · updated <UpdatedAgo at={list.dataUpdatedAt} /></>}
                   </>}
             </p>
           </div>
@@ -131,13 +130,14 @@ function StatusPill({ status }: { status: Status }) {
   )
 }
 
-function useNow(intervalMs: number) {
+// UpdatedAgo ticks on its own so the once-a-second clock does not re-render the table.
+function UpdatedAgo({ at }: { at: number }) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), intervalMs)
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
-  }, [intervalMs])
-  return now
+  }, [])
+  return <>{ago(now - at)}</>
 }
 
 function ago(ms: number) {
