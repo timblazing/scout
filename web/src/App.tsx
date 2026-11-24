@@ -1,70 +1,60 @@
-import { useEffect, useMemo, useState } from "react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { AlertTriangle, Radar, RefreshCw, Search } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { AlertTriangle, Radar, Search } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DevicesTable } from "@/components/devices-table"
-import { StatCards, type StatusFilter } from "@/components/stat-cards"
-import { getOverview, startScan } from "@/lib/api"
-import { timeAgo } from "@/lib/format"
-import { cn } from "@/lib/utils"
+import { getDevices } from "@/lib/api"
+import { loadCatalog } from "@/lib/icons"
 
 export default function App() {
-  const queryClient = useQueryClient()
   const [query, setQuery] = useState("")
-  const [filter, setFilter] = useState<StatusFilter>("all")
-  const now = useNow(15_000)
+  const searchRef = useRef<HTMLInputElement>(null)
 
-  const overview = useQuery({
-    queryKey: ["overview"],
-    queryFn: getOverview,
-    // Poll quickly while a scan is running so results stream in, and slowly
-    // otherwise; the server keeps scanning on its own schedule.
-    refetchInterval: (q) => (q.state.data?.scanning ? 2_000 : 15_000),
+  const list = useQuery({
+    queryKey: ["devices"],
+    queryFn: getDevices,
+    refetchInterval: 10_000,
   })
+  const data = list.data
 
-  const scan = useMutation({
-    mutationFn: startScan,
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["overview"] }),
-  })
+  // Load the brand-icon catalog once the first paint is done; rows use it to
+  // match vendors to icons.
+  useEffect(() => {
+    void loadCatalog()
+  }, [])
 
-  const data = overview.data
-  const scanning = scan.isPending || !!data?.scanning
+  // "/" jumps to the search box, unless the user is already typing somewhere.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return
+      event.preventDefault()
+      searchRef.current?.focus()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [])
 
-  const devices = useMemo(() => {
-    if (!data) return undefined
-    if (filter === "online") return data.devices.filter((d) => d.status !== "offline")
-    if (filter === "offline") return data.devices.filter((d) => d.status === "offline")
-    return data.devices
-  }, [data, filter])
+  const count = data?.devices.length
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-8 sm:px-6 sm:py-10">
-      <header className="mb-2 flex items-center gap-2.5">
-        <Radar className="size-5" strokeWidth={1.5} aria-hidden="true" />
-        <h1 className="text-lg font-semibold tracking-tight">Scout</h1>
-      </header>
-      {data?.network_warning && (
-        <div className="flex gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-200/90">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-400" />
-          <p>{data.network_warning}</p>
+    <main className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-8 sm:px-6 sm:py-10">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-baseline gap-2.5">
+          <Radar className="size-5 self-center" strokeWidth={1.5} aria-hidden="true" />
+          <h1 className="text-lg font-semibold tracking-tight">Scout</h1>
+          {count !== undefined && (
+            <span role="status" className="text-sm text-muted-foreground tabular-nums">
+              {count} {count === 1 ? "device" : "devices"}
+            </span>
+          )}
         </div>
-      )}
-
-      {overview.isError && (
-        <div role="alert" className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300">
-          Could not reach Scout. {data ? "Showing the last available devices." : "Check that the server is running."}
-          <button type="button" className="ml-2 underline underline-offset-4" onClick={() => void overview.refetch()}>Retry</button>
-        </div>
-      )}
-
-      <StatCards unavailable={overview.isError && !data} data={data} filter={filter} onFilter={setFilter} />
-
-      <div className="flex flex-col gap-2 pt-4 sm:flex-row sm:items-center">
-        <div className="relative flex-1 sm:max-w-xs">
+        <div className="relative sm:w-64">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={searchRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search devices…"
@@ -72,40 +62,29 @@ export default function App() {
             className="pl-8"
           />
         </div>
-        <div className="flex items-center justify-between gap-3 sm:ml-auto">
-          <span role="status" className="text-xs text-muted-foreground tabular-nums" title={data?.last_scan && new Date(data.last_scan).toLocaleString()}>
-            {scanning ? (
-              "Scanning…"
-            ) : (
-              <>
-                {data?.continuous_scan && (
-                  <span className="mr-1.5 inline-block size-1.5 rounded-full bg-emerald-500 align-middle" />
-                )}
-                {!data ? (overview.isError ? "Server unavailable" : "Connecting…") : data.last_scan ? `Last scan ${timeAgo(data.last_scan, now)}` : "No scans yet"}
-              </>
-            )}
-          </span>
-          <Button variant="outline" size="sm" onClick={() => scan.mutate()} disabled={scanning || !data}>
-            <RefreshCw className={cn(scanning && "motion-safe:animate-spin")} />
-            Scan
-          </Button>
+      </header>
+
+      {data?.warning && (
+        <div className="flex gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-200/90">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-400" />
+          <p>{data.warning}</p>
         </div>
-      </div>
+      )}
 
-      {scan.isError && <p role="alert" className="text-sm text-red-400">{scan.error.message}</p>}
+      {list.isError && (
+        <div role="alert" className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300">
+          Could not reach Scout. {data ? "Showing the last available devices." : "Check that the server is running."}
+          <button type="button" className="ml-2 underline underline-offset-4" onClick={() => void list.refetch()}>Retry</button>
+        </div>
+      )}
 
-      <DevicesTable devices={devices} query={query} now={now} filter={filter} unavailable={overview.isError && !data} onReset={() => { setQuery(""); setFilter("all") }} />
+      <DevicesTable
+        devices={data?.devices}
+        scanning={!!data?.scanning}
+        query={query}
+        unavailable={list.isError && !data}
+        onReset={() => setQuery("")}
+      />
     </main>
   )
-}
-
-// useNow re-renders on an interval so relative times keep ticking between
-// polls.
-function useNow(intervalMs: number) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs)
-    return () => clearInterval(id)
-  }, [intervalMs])
-  return now
 }

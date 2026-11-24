@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/291-Group/LAN-Orangutan/internal/network"
 )
@@ -84,39 +83,24 @@ func GetDefaultConfigFile() string {
 
 // Config holds all application configuration
 type Config struct {
-	Server    ServerConfig
-	Scanning  ScanningConfig
-	Storage   StorageConfig
-	Tailscale TailscaleConfig
-	UI        UIConfig
+	Server   ServerConfig
+	Scanning ScanningConfig
+	Storage  StorageConfig
 }
 
-// ServerConfig holds web server settings
+// ServerConfig holds web server settings. Scout does not authenticate dashboard
+// or API requests.
 type ServerConfig struct {
 	Port        int
 	BindAddress string
-	EnableAPI   bool
-
-	// Legacy upstream settings retained for config compatibility only.
-	// Scout does not authenticate dashboard or API requests.
-	Password      string
-	SessionHours  int
-	AllowInsecure bool
 }
 
 // ScanningConfig holds scanner settings
 type ScanningConfig struct {
-	ScanInterval    int
-	MinScanInterval int
-	EnablePortScan  bool
-	PortScanRange   string
-
-	// ContinuousScan makes the server re-scan the detected networks on its own
-	// every ScanInterval seconds, so the device list stays current without
-	// anyone clicking Scan or keeping a browser open. On by default: a
-	// discovery tool that only ever shows one stale scan is not much use. Set
-	// it false to scan only on demand.
-	ContinuousScan bool
+	// ScanInterval is how many seconds pass between background scans of the
+	// detected networks. The server always scans on its own; there is no manual
+	// scan.
+	ScanInterval int
 
 	// EnableServiceDetection turns on a light probe of a few well-known ports
 	// during a scan, used only to identify devices more precisely (a printer, a
@@ -124,7 +108,7 @@ type ScanningConfig struct {
 	// quiet ping sweep unless the user opts in.
 	EnableServiceDetection bool
 
-	// OnlyConfiguredNetworks, when true, offers only the networks declared in
+	// OnlyConfiguredNetworks, when true, scans only the networks declared in
 	// Networks and ignores everything auto-detection finds. Useful on a host
 	// with many Docker bridges, VLANs or routed interfaces where the automatic
 	// list is noisy.
@@ -143,28 +127,12 @@ type ScanningConfig struct {
 
 // StorageConfig holds data storage settings
 type StorageConfig struct {
-	MaxDevices    int
-	RetentionDays int
-	DataDir       string
+	DataDir string
 }
 
-// TailscaleConfig holds Tailscale integration settings
-type TailscaleConfig struct {
-	Enable     bool
-	AutoDetect bool
-}
-
-// UIConfig holds user interface settings
-type UIConfig struct {
-	Theme string
-}
-
-// Sensible fallbacks for the scan timings, also used by Normalize to repair an
-// out-of-range value rather than let it silently disable a feature.
-const (
-	defaultScanInterval    = 300
-	defaultMinScanInterval = 30
-)
+// defaultScanInterval is also used by Normalize to repair an out-of-range
+// value rather than let it silently disable the background scanner.
+const defaultScanInterval = 60
 
 // Default returns a Config with default values
 func Default() *Config {
@@ -174,34 +142,19 @@ func Default() *Config {
 			// Reachable from the network, because this is usually installed on
 			// a server or a Pi and opened from another machine. The dashboard
 			// has no login, so keep it on a trusted network.
-			BindAddress:  "0.0.0.0",
-			EnableAPI:    true,
-			SessionHours: 24 * 7,
+			BindAddress: "0.0.0.0",
 		},
 		Scanning: ScanningConfig{
-			ScanInterval:           defaultScanInterval,
-			MinScanInterval:        defaultMinScanInterval,
-			EnablePortScan:         false,
-			PortScanRange:          "1-1024",
-			ContinuousScan:         true,
-			EnableServiceDetection: false,
+			ScanInterval: defaultScanInterval,
 		},
 		Storage: StorageConfig{
-			MaxDevices:    1000,
-			RetentionDays: 90,
-			DataDir:       GetDefaultDataDir(),
-		},
-		Tailscale: TailscaleConfig{
-			Enable:     true,
-			AutoDetect: true,
-		},
-		UI: UIConfig{
-			Theme: "auto",
+			DataDir: GetDefaultDataDir(),
 		},
 	}
 }
 
-// Load reads configuration from an INI file
+// Load reads configuration from an INI file. Keys it does not know, such as
+// settings from older versions, are ignored.
 func Load(path string) (*Config, error) {
 	cfg := Default()
 
@@ -261,16 +214,6 @@ func (c *Config) setValue(section, key, value string) {
 			}
 		case "bind_address":
 			c.Server.BindAddress = value
-		case "enable_api":
-			c.Server.EnableAPI = parseBool(value)
-		case "password":
-			c.Server.Password = value
-		case "session_hours":
-			if v, err := strconv.Atoi(value); err == nil {
-				c.Server.SessionHours = v
-			}
-		case "allow_insecure":
-			c.Server.AllowInsecure = parseBool(value)
 		}
 	case "scanning":
 		switch key {
@@ -278,16 +221,6 @@ func (c *Config) setValue(section, key, value string) {
 			if v, err := strconv.Atoi(value); err == nil {
 				c.Scanning.ScanInterval = v
 			}
-		case "min_scan_interval":
-			if v, err := strconv.Atoi(value); err == nil {
-				c.Scanning.MinScanInterval = v
-			}
-		case "enable_port_scan":
-			c.Scanning.EnablePortScan = parseBool(value)
-		case "port_scan_range":
-			c.Scanning.PortScanRange = value
-		case "continuous_scan":
-			c.Scanning.ContinuousScan = parseBool(value)
 		case "enable_service_detection":
 			c.Scanning.EnableServiceDetection = parseBool(value)
 		case "only_configured_networks":
@@ -298,29 +231,8 @@ func (c *Config) setValue(section, key, value string) {
 			c.Scanning.ExcludeNetworks = network.ParseNetworkList(value)
 		}
 	case "storage":
-		switch key {
-		case "max_devices":
-			if v, err := strconv.Atoi(value); err == nil {
-				c.Storage.MaxDevices = v
-			}
-		case "retention_days":
-			if v, err := strconv.Atoi(value); err == nil {
-				c.Storage.RetentionDays = v
-			}
-		case "data_dir":
+		if key == "data_dir" {
 			c.Storage.DataDir = value
-		}
-	case "tailscale":
-		switch key {
-		case "enable":
-			c.Tailscale.Enable = parseBool(value)
-		case "auto_detect":
-			c.Tailscale.AutoDetect = parseBool(value)
-		}
-	case "ui":
-		switch key {
-		case "theme":
-			c.UI.Theme = value
 		}
 	}
 }
@@ -338,26 +250,6 @@ func (c *Config) ApplyEnv() {
 	}
 	if v := os.Getenv("ORANGUTAN_BIND_ADDRESS"); v != "" {
 		c.Server.BindAddress = v
-	}
-	if v := os.Getenv("ORANGUTAN_PASSWORD"); v != "" {
-		c.Server.Password = v
-	}
-	// A password file keeps the secret out of the process environment, which
-	// is how container secrets are normally delivered.
-	if v := os.Getenv("ORANGUTAN_PASSWORD_FILE"); v != "" {
-		if data, err := os.ReadFile(v); err == nil {
-			if pw := strings.TrimSpace(string(data)); pw != "" {
-				c.Server.Password = pw
-			}
-		}
-	}
-	if v := os.Getenv("ORANGUTAN_SESSION_HOURS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			c.Server.SessionHours = n
-		}
-	}
-	if v := os.Getenv("ORANGUTAN_ALLOW_INSECURE"); v != "" {
-		c.Server.AllowInsecure = parseBool(v)
 	}
 	if v := os.Getenv("ORANGUTAN_DATA_DIR"); v != "" {
 		c.Storage.DataDir = v
@@ -379,34 +271,19 @@ func (c *Config) ApplyEnv() {
 			c.Scanning.ScanInterval = n
 		}
 	}
-	if v := os.Getenv("ORANGUTAN_CONTINUOUS_SCAN"); v != "" {
-		c.Scanning.ContinuousScan = parseBool(v)
-	}
-	if v := os.Getenv("ORANGUTAN_THEME"); v != "" {
-		c.UI.Theme = v
-	}
 }
 
-// Normalize repairs out-of-range scan timings, clamping them back to the
-// defaults, and returns a human-readable note for each value it had to correct.
+// Normalize repairs an out-of-range scan interval, clamping it back to the
+// default, and returns a human-readable note for each value it had to correct.
 // A non-positive scan_interval would otherwise silently disable the background
-// scanner even with continuous_scan on, and a non-positive min_scan_interval
-// would silently disable per-network rate limiting; both are corrected here so
-// a config typo cannot quietly turn a feature off. Call it after loading the
-// config from file and environment.
+// scanner, so a config typo cannot quietly leave the device list empty. Call it
+// after loading the config from file and environment.
 func (c *Config) Normalize() []string {
 	var notes []string
 
-	if c.Scanning.MinScanInterval <= 0 {
-		notes = append(notes, fmt.Sprintf(
-			"min_scan_interval was %d; using %d so per-network rate limiting stays on",
-			c.Scanning.MinScanInterval, defaultMinScanInterval))
-		c.Scanning.MinScanInterval = defaultMinScanInterval
-	}
-
 	if c.Scanning.ScanInterval <= 0 {
 		notes = append(notes, fmt.Sprintf(
-			"scan_interval was %d; using %d so continuous scanning works when enabled",
+			"scan_interval was %d; using %d so the device list keeps updating",
 			c.Scanning.ScanInterval, defaultScanInterval))
 		c.Scanning.ScanInterval = defaultScanInterval
 	}
@@ -440,48 +317,16 @@ func isLoopbackAddress(addr string) bool {
 	return ip.IsLoopback()
 }
 
-// RequiresSetup reports whether the user must create a password before the
-// dashboard becomes usable.
-//
-// Setup is required whenever the server can be reached from the network and no
-// password exists yet. Bound to loopback the dashboard is already private, so
-// a password would be friction with no benefit, and an operator who has some
-// other protection in front can opt out entirely.
-func (c *Config) RequiresSetup() bool {
-	if c.Server.AllowInsecure {
-		return false
-	}
-	if c.IsLoopbackBind() {
-		return false
-	}
-	return c.Server.Password == ""
-}
-
-// PasswordFile returns the path where a password created through the setup page
-// is stored.
-//
-// It lives beside the data rather than in the config file, so that completing
-// setup does not rewrite a file the user maintains by hand.
-func (c *Config) PasswordFile() string {
-	return filepath.Join(c.Storage.DataDir, "auth")
-}
-
-// SessionTTL returns how long a login should remain valid.
-func (c *Config) SessionTTL() time.Duration {
-	if c.Server.SessionHours <= 0 {
-		return 24 * 7 * time.Hour
-	}
-	return time.Duration(c.Server.SessionHours) * time.Hour
-}
-
-// DevicesFile returns the full path to the devices JSON file
+// DevicesFile returns the path of the device list older versions kept. Scout
+// only reads it, once, to import names and icons into the names file.
 func (c *Config) DevicesFile() string {
 	return filepath.Join(c.Storage.DataDir, "devices.json")
 }
 
-// StateFile returns the full path to the scan state file
-func (c *Config) StateFile() string {
-	return filepath.Join(c.Storage.DataDir, "scan_state.json")
+// NamesFile returns the path of the file holding the user's device names and
+// icons, the only thing Scout persists.
+func (c *Config) NamesFile() string {
+	return filepath.Join(c.Storage.DataDir, "names.json")
 }
 
 // parseBool parses common boolean representations

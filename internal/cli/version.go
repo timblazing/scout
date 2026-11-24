@@ -116,11 +116,6 @@ func shortCommit(revision string) string {
 	return revision
 }
 
-// DisplayVersion returns the version string shown in the web interface.
-func DisplayVersion() string {
-	return Version
-}
-
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",

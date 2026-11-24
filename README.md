@@ -1,6 +1,6 @@
 # Scout
 
-A minimal, self-hosted LAN scanner. It runs as one Go binary with an embedded dashboard: stat cards and a device table, with no logins and no settings pages.
+A minimal, self-hosted LAN scanner. It runs as one Go binary with an embedded dashboard that lists the devices on your network right now, one row per device, with no logins and no settings pages. It rescans every 60 seconds and drops a device after it misses two scans in a row.
 
 ![Scout dashboard](docs/screenshot.png)
 
@@ -25,13 +25,13 @@ services:
 
 Open `http://<host>:291`. Host networking is required, so this won't work under Docker Desktop on macOS or Windows.
 
-Click a device name to rename it, then press Enter or click away to save. Click its icon to choose a device icon or search the Dashboard Icons collection. Names and icon choices are saved in `devices.json` under `ORANGUTAN_DATA_DIR` (`./data/devices.json` with the Compose volume above) and survive scans and restarts. Scout also matches known vendor and device names to Dashboard Icons automatically; manual choices take precedence. Brand icons load from the [Dashboard Icons jsDelivr CDN](https://github.com/homarr-labs/dashboard-icons#direct-links), so they need browser internet access. Scout falls back to a device icon if an image cannot load.
+Click a device name to rename it, then press Enter or click away to save. Click its icon to choose a device icon or search the Dashboard Icons collection. Names and icon choices are saved in `names.json` under `ORANGUTAN_DATA_DIR` (`./data/names.json` with the Compose volume above) and survive scans and restarts. Names are keyed by MAC address. An existing `devices.json` from an earlier version is imported once the first time Scout starts, then left alone. Scout also matches known vendor and device names to Dashboard Icons automatically; manual choices take precedence. Brand icons load from the [Dashboard Icons jsDelivr CDN](https://github.com/homarr-labs/dashboard-icons#direct-links), so they need browser internet access. Scout falls back to a device icon if an image cannot load.
 
-> The dashboard has no authentication. Anyone who can reach the port can read and modify device records and trigger scans. Keep it on a trusted network, or put a reverse proxy with auth in front of it.
+> The dashboard has no authentication. Anyone who can reach the port can see your devices and rename them. Keep it on a trusted network, or put a reverse proxy with auth in front of it.
 
 The image runs as root for raw network discovery. Pre-creating `./data` with
 your user as owner prevents Docker from creating the directory as root, but
-device files are still written by the container as root with owner-only access.
+`names.json` is still written by the container as root with owner-only access.
 `PUID` and `PGID` are not supported.
 
 ## Configuration
@@ -45,12 +45,11 @@ Configuration comes from environment variables, or from `config.ini` (see `confi
 | `ORANGUTAN_NETWORKS` | auto-detect | Extra CIDRs to scan, comma separated |
 | `ORANGUTAN_EXCLUDE_NETWORKS` | | CIDRs to skip |
 | `ORANGUTAN_ONLY_CONFIGURED_NETWORKS` | `false` | Scan only `ORANGUTAN_NETWORKS` |
-| `ORANGUTAN_SCAN_INTERVAL` | `300` | Seconds between background scans |
-| `ORANGUTAN_CONTINUOUS_SCAN` | `true` | Rescan in the background |
+| `ORANGUTAN_SCAN_INTERVAL` | `60` | Seconds between scans |
 | `ORANGUTAN_ENABLE_SERVICE_DETECTION` | `false` | Probe ports to flag web UIs and risky services |
-| `ORANGUTAN_DATA_DIR` | `/var/lib/lan-orangutan` | Device and scan history |
+| `ORANGUTAN_DATA_DIR` | `/var/lib/lan-orangutan` | Saved device names and icons |
 
-The `ORANGUTAN_*` names and the data path are kept from upstream, so an existing LAN Orangutan data directory works unchanged.
+The `ORANGUTAN_*` names and the data path are kept from upstream. Tailscale addresses (100.64.0.0/10) and single-address networks are never scanned.
 
 ## Development
 
@@ -68,10 +67,10 @@ SCOUT_API=http://10.0.0.5:291 make web-dev   # or proxy to a remote instance
 |---|---|
 | `web/` | Vite + React + TypeScript + Tailwind v4 + shadcn/ui |
 | `internal/web/` | Embeds and serves the built dashboard |
-| `internal/api/` | JSON API; the dashboard polls `/api/overview` and posts to `/api/scan/start` |
+| `internal/api/` | JSON API; the dashboard polls `GET /api/devices` and saves names with `PATCH /api/devices/{id}` |
 | `internal/scanner/`, `internal/network/` | Discovery (upstream) |
 
-The searchable Dashboard Icons catalog is bundled with the frontend, so searching works without contacting GitHub. Run `python3 scripts/update-dashboard-icons.py` to refresh it from the upstream metadata and file list, then rebuild the dashboard. The icons remain hosted by Dashboard Icons and are licensed under [Apache 2.0](https://github.com/homarr-labs/dashboard-icons/blob/main/LICENSE).
+The searchable Dashboard Icons catalog is bundled with the frontend and loads on demand, so searching works without contacting GitHub. Run `python3 scripts/update-dashboard-icons.py` to refresh it from the upstream metadata and file list, then rebuild the dashboard. The icons remain hosted by Dashboard Icons and are licensed under [Apache 2.0](https://github.com/homarr-labs/dashboard-icons/blob/main/LICENSE).
 
 ## Releasing
 

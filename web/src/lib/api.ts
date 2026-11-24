@@ -1,43 +1,21 @@
-export type DeviceStatus = "online" | "seen" | "offline"
-
 export interface Device {
+  id: string
   ip: string
   mac: string
   hostname: string
   vendor: string
-  type?: string
-  icon?: string
-  web_ui?: boolean
-  risks?: string[]
+  type: string
   label: string
-  notes: string
-  group: string
-  first_seen: string
-  last_seen: string
-  response_time?: number
-  address_history?: { ip: string; changed_at: string }[]
-  status: DeviceStatus
+  icon: string
+  web_ui: boolean
+  risks: string[]
 }
 
-export interface Network {
-  cidr: string
-  interface: string
-  friendly_name: string
-  ip: string
-  is_tailscale: boolean
-  is_wireless: boolean
-}
-
-export interface Overview {
-  stats: { total: number; online: number; offline: number }
+export interface DeviceList {
   devices: Device[]
-  networks: Network[]
-  network_warning?: string
-  flagged: number
-  moved: number
-  last_scan?: string
-  continuous_scan: boolean
-  scanning: boolean
+  warning?: string
+  // scanning is true until the first scan has finished.
+  scanning?: boolean
 }
 
 interface Envelope<T> {
@@ -55,18 +33,12 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return body.data as T
 }
 
-export const getOverview = () => request<Overview>("/api/overview")
-
-export const updateDevice = (ip: string, fields: { label?: string; icon?: string }) =>
-  request<unknown>("/api/device", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ip, ...fields }),
-  })
+export const getDevices = () => request<DeviceList>("/api/devices")
 
 // The API rejects mutating requests that are not JSON, as CSRF protection.
-export const startScan = () =>
-  request<unknown>("/api/scan/start?network=all", {
-    method: "POST",
+export const updateDevice = (id: string, fields: { label?: string; icon?: string }) =>
+  request<unknown>(`/api/devices/${encodeURIComponent(id)}`, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields),
   })

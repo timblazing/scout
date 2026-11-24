@@ -2,10 +2,8 @@
 package network
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
-	"runtime"
 	"strings"
 
 	"github.com/291-Group/LAN-Orangutan/internal/types"
@@ -65,30 +63,6 @@ func DetectNetworks() ([]types.Network, error) {
 	return networks, nil
 }
 
-// calculateCIDR calculates the network CIDR from an IP and prefix length
-func calculateCIDR(ip string, prefixLen int) string {
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
-		return ""
-	}
-
-	ipv4 := parsedIP.To4()
-	if ipv4 == nil {
-		return ""
-	}
-
-	// Create subnet mask
-	mask := net.CIDRMask(prefixLen, 32)
-
-	// Calculate network address
-	network := make(net.IP, 4)
-	for i := 0; i < 4; i++ {
-		network[i] = ipv4[i] & mask[i]
-	}
-
-	return fmt.Sprintf("%s/%d", network.String(), prefixLen)
-}
-
 // getFriendlyName returns a user-friendly name for an interface
 func getFriendlyName(ifname string, ip net.IP) string {
 	switch {
@@ -130,15 +104,25 @@ var tailscaleCGNAT = &net.IPNet{
 	Mask: net.CIDRMask(10, 32),
 }
 
-// IsTailscaleNetwork reports whether a CIDR belongs to the Tailscale network.
-// Tailscale hands every node a single-address /32, so such a network cannot be
-// swept for devices; its peers have to be read from Tailscale itself.
-func IsTailscaleNetwork(cidr string) bool {
-	ip, _, err := net.ParseCIDR(cidr)
-	if err != nil {
+// IsTailscaleIP reports whether ip is in the range Tailscale assigns to nodes
+// (the carrier-grade NAT block, 100.64.0.0/10).
+func IsTailscaleIP(ip net.IP) bool {
+	v4 := ip.To4()
+	return v4 != nil && tailscaleCGNAT.Contains(v4)
+}
+
+// Scannable reports whether a network is worth sweeping for devices. Tailscale
+// addresses and single-address networks (a /32, such as a VPN client address)
+// have no neighbours to find, so Scout leaves them out entirely.
+func Scannable(cidr string) bool {
+	ip, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil || ip.To4() == nil {
 		return false
 	}
-	return tailscaleCGNAT.Contains(ip.To4())
+	if ones, bits := ipNet.Mask.Size(); ones == bits {
+		return false
+	}
+	return !IsTailscaleIP(ip)
 }
 
 // isTailscaleInterface returns true if the interface is a Tailscale interface.
@@ -156,7 +140,7 @@ func isTailscaleInterface(ifname string, ip net.IP) bool {
 	if !strings.HasPrefix(ifname, "utun") && !strings.HasPrefix(ifname, "tun") {
 		return false
 	}
-	return ip != nil && tailscaleCGNAT.Contains(ip.To4())
+	return ip != nil && IsTailscaleIP(ip)
 }
 
 // isWirelessInterface returns true if the interface is a wireless interface
@@ -172,131 +156,8 @@ func isWirelessInterface(ifname string) bool {
 	return false
 }
 
-// GetDefaultGateway returns the default gateway IP
-func GetDefaultGateway() (string, error) {
-	var (
-		name string
-		args []string
-	)
-
-	switch runtime.GOOS {
-	case "darwin":
-		// macOS: use netstat
-		name, args = "netstat", []string{"-rn"}
-	case "linux":
-		// Linux: try ip command first
-		name, args = "ip", []string{"-j", "route", "show", "default"}
-	default:
-		// Fallback for other systems
-		name, args = "netstat", []string{"-rn"}
-	}
-
-	output, err := runCommand(name, args...)
-	if err != nil {
-		return "", fmt.Errorf("failed to get default route: %w", err)
-	}
-
-	if runtime.GOOS == "linux" {
-		// Parse JSON output from ip command
-		var routes []struct {
-			Gateway string `json:"gateway"`
-		}
-		if err := json.Unmarshal(output, &routes); err == nil && len(routes) > 0 {
-			return routes[0].Gateway, nil
-		}
-	}
-
-	// Parse netstat output (works on macOS and as fallback)
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		fields := strings.Fields(line)
-		if len(fields) >= 2 && (fields[0] == "default" || fields[0] == "0.0.0.0") {
-			gateway := fields[1]
-			if net.ParseIP(gateway) != nil {
-				return gateway, nil
-			}
-		}
-	}
-
-	return "", nil
-}
-
-// GetDNSServers returns configured DNS servers
-func GetDNSServers() []string {
-	// Try systemd-resolved first
-	output, err := runCommand("resolvectl", "status")
-	if err == nil {
-		return parseDNSFromResolvectl(string(output))
-	}
-
-	// Fallback to /etc/resolv.conf
-	return parseDNSFromResolvConf()
-}
-
-func parseDNSFromResolvectl(output string) []string {
-	var servers []string
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "DNS Servers:") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				for _, s := range strings.Fields(parts[1]) {
-					if net.ParseIP(s) != nil {
-						servers = append(servers, s)
-					}
-				}
-			}
-		}
-	}
-	return servers
-}
-
-func parseDNSFromResolvConf() []string {
-	output, err := runCommand("grep", "nameserver", "/etc/resolv.conf")
-	if err != nil {
-		return nil
-	}
-
-	var servers []string
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		fields := strings.Fields(line)
-		if len(fields) >= 2 && fields[0] == "nameserver" {
-			if net.ParseIP(fields[1]) != nil {
-				servers = append(servers, fields[1])
-			}
-		}
-	}
-	return servers
-}
-
 // ValidateCIDR checks if a CIDR string is valid
 func ValidateCIDR(cidr string) bool {
 	_, _, err := net.ParseCIDR(cidr)
 	return err == nil
-}
-
-// ParseIPRange parses a port range string (e.g., "1-1024")
-func ParsePortRange(rangeStr string) (start, end int, err error) {
-	parts := strings.Split(rangeStr, "-")
-	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("invalid port range format")
-	}
-
-	var startPort, endPort int
-	if _, err := fmt.Sscanf(parts[0], "%d", &startPort); err != nil {
-		return 0, 0, fmt.Errorf("invalid start port")
-	}
-	if _, err := fmt.Sscanf(parts[1], "%d", &endPort); err != nil {
-		return 0, 0, fmt.Errorf("invalid end port")
-	}
-
-	if startPort < 1 || startPort > 65535 || endPort < 1 || endPort > 65535 {
-		return 0, 0, fmt.Errorf("port out of range")
-	}
-	if startPort > endPort {
-		return 0, 0, fmt.Errorf("start port greater than end port")
-	}
-
-	return startPort, endPort, nil
 }

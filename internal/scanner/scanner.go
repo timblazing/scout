@@ -11,13 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/291-Group/LAN-Orangutan/internal/network"
 	"github.com/291-Group/LAN-Orangutan/internal/types"
 )
 
 // Scanner performs network scans
 type Scanner struct {
-	minInterval time.Duration
 	// serviceDetection turns on the opt-in probe that identifies devices by
 	// their open ports. Off by default; a scan stays a quiet ping sweep.
 	serviceDetection bool
@@ -25,11 +23,8 @@ type Scanner struct {
 
 // New creates a new Scanner. serviceDetection enables the opt-in port probe
 // used to identify devices more precisely.
-func New(minIntervalSeconds int, serviceDetection bool) *Scanner {
-	return &Scanner{
-		minInterval:      time.Duration(minIntervalSeconds) * time.Second,
-		serviceDetection: serviceDetection,
-	}
+func New(serviceDetection bool) *Scanner {
+	return &Scanner{serviceDetection: serviceDetection}
 }
 
 // nmapRun represents the root element of nmap XML output
@@ -43,7 +38,6 @@ type nmapHost struct {
 	Status    nmapStatus    `xml:"status"`
 	Addresses []nmapAddress `xml:"address"`
 	Hostnames nmapHostnames `xml:"hostnames"`
-	Times     nmapTimes     `xml:"times"`
 }
 
 // nmapStatus represents the host status
@@ -69,11 +63,6 @@ type nmapHostname struct {
 	Type string `xml:"type,attr"`
 }
 
-// nmapTimes contains timing information
-type nmapTimes struct {
-	SRTT string `xml:"srtt,attr"`
-}
-
 // Scan performs a network scan on the given CIDR
 func (s *Scanner) Scan(ctx context.Context, cidr string) (*types.ScanResult, error) {
 	// Validate CIDR
@@ -83,13 +72,6 @@ func (s *Scanner) Scan(ctx context.Context, cidr string) (*types.ScanResult, err
 	}
 
 	startTime := time.Now()
-
-	// Tailscale gives every node its own /32, so there is no subnet to sweep
-	// and a scan could only ever find this machine. Tailscale already knows the
-	// whole tailnet, so ask it for the peers instead.
-	if network.IsTailscaleNetwork(cidr) {
-		return s.scanTailscale(cidr, startTime), nil
-	}
 
 	// Try nmap first
 	devices, scanner, err := s.scanWithNmap(ctx, cidr)
@@ -129,29 +111,6 @@ func (s *Scanner) Scan(ctx context.Context, cidr string) (*types.ScanResult, err
 		Duration:    duration,
 		Timestamp:   time.Now(),
 	}, nil
-}
-
-// scanTailscale lists the devices reachable over Tailscale.
-func (s *Scanner) scanTailscale(cidr string, startTime time.Time) *types.ScanResult {
-	devices := network.GetTailscaleDevices()
-	if devices == nil {
-		return &types.ScanResult{
-			Success:   false,
-			Error:     "Tailscale is not connected",
-			Network:   cidr,
-			Timestamp: time.Now(),
-		}
-	}
-
-	return &types.ScanResult{
-		Success:     true,
-		Devices:     devices,
-		DeviceCount: len(devices),
-		Network:     cidr,
-		Scanner:     "tailscale",
-		Duration:    time.Since(startTime).Seconds(),
-		Timestamp:   time.Now(),
-	}
 }
 
 // scanWithNmap performs a scan using nmap
@@ -215,13 +174,6 @@ func (s *Scanner) scanWithNmap(ctx context.Context, cidr string) ([]types.Device
 		// Try reverse DNS if no hostname
 		if device.Hostname == "" {
 			device.Hostname = reverseDNS(device.IP)
-		}
-
-		// Parse response time
-		if host.Times.SRTT != "" {
-			if srtt, err := parseResponseTime(host.Times.SRTT); err == nil {
-				device.ResponseTime = &srtt
-			}
 		}
 
 		// Infer the device type from the vendor and hostname. Port signals are
@@ -325,29 +277,6 @@ func reverseDNS(ip string) string {
 	case hostname := <-done:
 		return hostname
 	}
-}
-
-// parseResponseTime parses nmap SRTT value (microseconds) to milliseconds
-func parseResponseTime(srtt string) (float64, error) {
-	var usec int
-	if _, err := fmt.Sscanf(srtt, "%d", &usec); err != nil {
-		return 0, err
-	}
-	return float64(usec) / 1000.0, nil
-}
-
-// CheckRateLimit checks if a scan can proceed based on rate limiting
-func (s *Scanner) CheckRateLimit(lastScan time.Time) (bool, time.Duration) {
-	if lastScan.IsZero() {
-		return true, 0
-	}
-
-	elapsed := time.Since(lastScan)
-	if elapsed >= s.minInterval {
-		return true, 0
-	}
-
-	return false, s.minInterval - elapsed
 }
 
 // getInterfaceForCIDR tries to determine which network interface to use for a given CIDR

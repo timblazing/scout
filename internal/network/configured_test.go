@@ -53,3 +53,25 @@ func TestInvalidCIDRsAreIgnored(t *testing.T) {
 		t.Errorf("kept the wrong network: %q", got[0].CIDR)
 	}
 }
+
+func TestScannable(t *testing.T) {
+	cases := []struct {
+		cidr string
+		want bool
+	}{
+		{"192.168.1.0/24", true},
+		{"10.0.0.0/8", true},
+		{"10.7.0.2/32", false},   // a VPN client's own address
+		{"100.64.0.0/10", false}, // Tailscale range
+		{"100.101.102.103/32", false},
+		{"100.127.255.0/24", false}, // inside the Tailscale range
+		{"100.128.0.0/24", true},    // just outside it
+		{"fd00::/64", false},        // IPv6 cannot be swept
+		{"not a cidr", false},
+	}
+	for _, c := range cases {
+		if got := Scannable(c.cidr); got != c.want {
+			t.Errorf("Scannable(%q) = %v, want %v", c.cidr, got, c.want)
+		}
+	}
+}

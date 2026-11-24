@@ -12,8 +12,8 @@ post credentials or private network inventories in public issues.
 ## Access and privileges
 
 Scout has **no authentication** and listens on `0.0.0.0:291` by default. Anyone
-who can reach the service can read device history and use the API, including
-scanning, editing or deleting device records, and toggling continuous scanning.
+who can reach the service can see the devices on your network and use the API, including
+renaming devices and changing their icons.
 Legacy password, session, and `allow_insecure` settings do not protect Scout.
 Keep the port on a trusted network, or use a reverse proxy with authentication.
 Scout serves HTTP; use a TLS proxy or private VPN for encrypted remote access.

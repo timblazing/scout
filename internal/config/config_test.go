@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 // writeConfig writes body to a temporary config file and returns its path.
@@ -17,23 +16,15 @@ func writeConfig(t *testing.T, body string) string {
 	return path
 }
 
-func TestDefaultIsReachableButRequiresSetup(t *testing.T) {
+func TestDefaults(t *testing.T) {
 	cfg := Default()
 
 	// Reachable from the network, because that is how this is normally used.
 	if cfg.IsLoopbackBind() {
 		t.Fatalf("default bind address %q should accept connections from the network", cfg.Server.BindAddress)
 	}
-	if cfg.Server.Password != "" {
-		t.Fatal("no password should be set by default")
-	}
-	if cfg.Server.AllowInsecure {
-		t.Fatal("password protection must not be skipped by default")
-	}
-
-	// Safety comes from setup, not from being unreachable.
-	if !cfg.RequiresSetup() {
-		t.Fatal("a fresh install reachable from the network must require setup")
+	if cfg.Scanning.ScanInterval != 60 {
+		t.Errorf("default scan interval = %d, want 60", cfg.Scanning.ScanInterval)
 	}
 }
 
@@ -42,19 +33,29 @@ func TestMissingFileFallsBackToDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a missing config file should not be an error: %v", err)
 	}
-	if !cfg.RequiresSetup() {
-		t.Fatal("a missing config file should leave the setup requirement in place")
+	if cfg.Server.Port != Default().Server.Port {
+		t.Errorf("port = %d, want the default", cfg.Server.Port)
 	}
 }
 
-func TestLoadServerSettings(t *testing.T) {
+func TestLoadSettings(t *testing.T) {
 	path := writeConfig(t, `
 [server]
 port = 8080
-bind_address = 0.0.0.0
+bind_address = 127.0.0.1
+; settings from older versions are ignored
 password = hunter2
-session_hours = 12
-allow_insecure = true
+
+[scanning]
+scan_interval = 120
+networks = 10.0.5.0/24, 192.168.10.0/24
+exclude_networks = 10.99.0.0/16
+only_configured_networks = true
+enable_service_detection = yes
+continuous_scan = false
+
+[storage]
+data_dir = /srv/scout
 `)
 
 	cfg, err := Load(path)
@@ -65,46 +66,23 @@ allow_insecure = true
 	if cfg.Server.Port != 8080 {
 		t.Errorf("port = %d, want 8080", cfg.Server.Port)
 	}
-	if cfg.Server.BindAddress != "0.0.0.0" {
-		t.Errorf("bind_address = %q, want 0.0.0.0", cfg.Server.BindAddress)
+	if cfg.Server.BindAddress != "127.0.0.1" {
+		t.Errorf("bind_address = %q, want 127.0.0.1", cfg.Server.BindAddress)
 	}
-	if cfg.Server.Password != "hunter2" {
-		t.Errorf("password = %q, want hunter2", cfg.Server.Password)
+	if cfg.Scanning.ScanInterval != 120 {
+		t.Errorf("scan_interval = %d, want 120", cfg.Scanning.ScanInterval)
 	}
-	if cfg.Server.SessionHours != 12 {
-		t.Errorf("session_hours = %d, want 12", cfg.Server.SessionHours)
+	if len(cfg.Scanning.Networks) != 2 || cfg.Scanning.Networks[1] != "192.168.10.0/24" {
+		t.Errorf("networks = %v", cfg.Scanning.Networks)
 	}
-	if !cfg.Server.AllowInsecure {
-		t.Error("allow_insecure should be true")
+	if len(cfg.Scanning.ExcludeNetworks) != 1 || cfg.Scanning.ExcludeNetworks[0] != "10.99.0.0/16" {
+		t.Errorf("exclude_networks = %v", cfg.Scanning.ExcludeNetworks)
 	}
-}
-
-func TestContinuousScanDefaultsOn(t *testing.T) {
-	if !Default().Scanning.ContinuousScan {
-		t.Error("continuous_scan should default to true")
+	if !cfg.Scanning.OnlyConfiguredNetworks || !cfg.Scanning.EnableServiceDetection {
+		t.Error("only_configured_networks and enable_service_detection should be true")
 	}
-}
-
-func TestContinuousScanCanBeDisabled(t *testing.T) {
-	path := writeConfig(t, `
-[scanning]
-continuous_scan = false
-`)
-	cfg, err := Load(path)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Scanning.ContinuousScan {
-		t.Error("continuous_scan = false in the file should disable it")
-	}
-}
-
-func TestContinuousScanEnvOverride(t *testing.T) {
-	t.Setenv("ORANGUTAN_CONTINUOUS_SCAN", "false")
-	cfg := Default()
-	cfg.ApplyEnv()
-	if cfg.Scanning.ContinuousScan {
-		t.Error("ORANGUTAN_CONTINUOUS_SCAN=false should disable continuous scan")
+	if cfg.Storage.DataDir != "/srv/scout" {
+		t.Errorf("data_dir = %q", cfg.Storage.DataDir)
 	}
 }
 
@@ -135,71 +113,11 @@ func TestIsLoopbackBind(t *testing.T) {
 	}
 }
 
-func TestRequiresSetupWhenReachableWithNoPassword(t *testing.T) {
-	cfg := Default()
-	cfg.Server.BindAddress = "0.0.0.0"
-
-	if !cfg.RequiresSetup() {
-		t.Fatal("a network-reachable install with no password must require setup")
-	}
-}
-
-func TestRequiresSetupWithEmptyBindAddress(t *testing.T) {
-	// An empty bind address listens on every interface, so it is just as
-	// exposed as 0.0.0.0 and must be caught too.
-	cfg := Default()
-	cfg.Server.BindAddress = ""
-
-	if !cfg.RequiresSetup() {
-		t.Fatal("an empty bind address with no password must require setup")
-	}
-}
-
-func TestNoSetupWhenPasswordAlreadySet(t *testing.T) {
-	cfg := Default()
-	cfg.Server.BindAddress = "0.0.0.0"
-	cfg.Server.Password = "hunter2"
-
-	if cfg.RequiresSetup() {
-		t.Fatal("an existing password means there is nothing to set up")
-	}
-}
-
-func TestNoSetupWhenLoopbackOnly(t *testing.T) {
-	// Nobody else can reach it, so a password would be friction with no gain.
-	cfg := Default()
-	cfg.Server.BindAddress = "127.0.0.1"
-
-	if cfg.RequiresSetup() {
-		t.Fatal("a loopback-only install should not demand a password")
-	}
-}
-
-func TestNoSetupWhenExplicitlyOptedOut(t *testing.T) {
-	cfg := Default()
-	cfg.Server.BindAddress = "0.0.0.0"
-	cfg.Server.AllowInsecure = true
-
-	if cfg.RequiresSetup() {
-		t.Fatal("an explicit opt-out should be honoured")
-	}
-}
-
-func TestPasswordFileLivesBesideTheData(t *testing.T) {
-	cfg := Default()
-	cfg.Storage.DataDir = "/tmp/example"
-
-	if got, want := cfg.PasswordFile(), filepath.Join("/tmp/example", "auth"); got != want {
-		t.Errorf("PasswordFile() = %q, want %q", got, want)
-	}
-}
-
 func TestEnvOverridesConfigFile(t *testing.T) {
 	path := writeConfig(t, `
 [server]
 port = 8080
 bind_address = 127.0.0.1
-password = from-file
 `)
 
 	cfg, err := Load(path)
@@ -209,8 +127,8 @@ password = from-file
 
 	t.Setenv("ORANGUTAN_PORT", "9999")
 	t.Setenv("ORANGUTAN_BIND_ADDRESS", "0.0.0.0")
-	t.Setenv("ORANGUTAN_PASSWORD", "from-env")
-	t.Setenv("ORANGUTAN_ALLOW_INSECURE", "true")
+	t.Setenv("ORANGUTAN_SCAN_INTERVAL", "30")
+	t.Setenv("ORANGUTAN_DATA_DIR", "/tmp/scout-data")
 	cfg.ApplyEnv()
 
 	if cfg.Server.Port != 9999 {
@@ -219,11 +137,11 @@ password = from-file
 	if cfg.Server.BindAddress != "0.0.0.0" {
 		t.Errorf("bind_address = %q, want the environment value", cfg.Server.BindAddress)
 	}
-	if cfg.Server.Password != "from-env" {
-		t.Errorf("password = %q, want the environment value", cfg.Server.Password)
+	if cfg.Scanning.ScanInterval != 30 {
+		t.Errorf("scan_interval = %d, want 30", cfg.Scanning.ScanInterval)
 	}
-	if !cfg.Server.AllowInsecure {
-		t.Error("allow_insecure should come from the environment")
+	if got, want := cfg.NamesFile(), filepath.Join("/tmp/scout-data", "names.json"); got != want {
+		t.Errorf("NamesFile() = %q, want %q", got, want)
 	}
 }
 
@@ -238,72 +156,6 @@ func TestEnvLeavesUnsetValuesAlone(t *testing.T) {
 	}
 	if cfg.Server.BindAddress != Default().Server.BindAddress {
 		t.Error("bind address should be untouched with no environment variable set")
-	}
-}
-
-func TestPasswordFileIsRead(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "secret")
-	// Trailing newline is normal in a secret file and must be trimmed.
-	if err := os.WriteFile(path, []byte("file-secret\n"), 0o600); err != nil {
-		t.Fatalf("writing secret: %v", err)
-	}
-
-	cfg := Default()
-	t.Setenv("ORANGUTAN_PASSWORD_FILE", path)
-	cfg.ApplyEnv()
-
-	if cfg.Server.Password != "file-secret" {
-		t.Errorf("password = %q, want the trimmed file contents", cfg.Server.Password)
-	}
-}
-
-func TestPasswordFileWinsOverPasswordVar(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "secret")
-	if err := os.WriteFile(path, []byte("file-secret"), 0o600); err != nil {
-		t.Fatalf("writing secret: %v", err)
-	}
-
-	cfg := Default()
-	t.Setenv("ORANGUTAN_PASSWORD", "env-secret")
-	t.Setenv("ORANGUTAN_PASSWORD_FILE", path)
-	cfg.ApplyEnv()
-
-	if cfg.Server.Password != "file-secret" {
-		t.Errorf("password = %q, want the file to take precedence", cfg.Server.Password)
-	}
-}
-
-func TestMissingPasswordFileIsIgnored(t *testing.T) {
-	cfg := Default()
-	t.Setenv("ORANGUTAN_PASSWORD", "env-secret")
-	t.Setenv("ORANGUTAN_PASSWORD_FILE", filepath.Join(t.TempDir(), "nope"))
-	cfg.ApplyEnv()
-
-	// A missing file should not wipe out a password supplied another way.
-	if cfg.Server.Password != "env-secret" {
-		t.Errorf("password = %q, want the environment value kept", cfg.Server.Password)
-	}
-}
-
-func TestSessionTTL(t *testing.T) {
-	cfg := Default()
-	if got := cfg.SessionTTL(); got != 7*24*time.Hour {
-		t.Errorf("default SessionTTL = %v, want one week", got)
-	}
-
-	cfg.Server.SessionHours = 3
-	if got := cfg.SessionTTL(); got != 3*time.Hour {
-		t.Errorf("SessionTTL = %v, want 3h", got)
-	}
-
-	// Nonsense values fall back to the default rather than expiring instantly.
-	cfg.Server.SessionHours = 0
-	if got := cfg.SessionTTL(); got != 7*24*time.Hour {
-		t.Errorf("SessionTTL with 0 hours = %v, want the default", got)
-	}
-	cfg.Server.SessionHours = -5
-	if got := cfg.SessionTTL(); got != 7*24*time.Hour {
-		t.Errorf("SessionTTL with a negative value = %v, want the default", got)
 	}
 }
 
@@ -327,7 +179,6 @@ port = 4242
 
 func TestNormalizeClampsNonPositiveScanInterval(t *testing.T) {
 	c := Default()
-	c.Scanning.ContinuousScan = true
 	c.Scanning.ScanInterval = 0
 
 	notes := c.Normalize()
@@ -340,34 +191,6 @@ func TestNormalizeClampsNonPositiveScanInterval(t *testing.T) {
 	}
 }
 
-func TestNormalizeClampsNonPositiveMinScanInterval(t *testing.T) {
-	c := Default()
-	c.Scanning.MinScanInterval = -5
-
-	notes := c.Normalize()
-
-	if c.Scanning.MinScanInterval != defaultMinScanInterval {
-		t.Errorf("min_scan_interval = %d, want clamped to %d", c.Scanning.MinScanInterval, defaultMinScanInterval)
-	}
-	if len(notes) == 0 {
-		t.Error("expected a warning note about min_scan_interval, got none")
-	}
-}
-
-func TestNormalizeClampsScanIntervalEvenWhenContinuousScanOff(t *testing.T) {
-	c := Default()
-	c.Scanning.ContinuousScan = false
-	c.Scanning.ScanInterval = 0
-
-	c.Normalize()
-
-	// Continuous scanning can be switched on at runtime from the UI, so the
-	// interval must always be valid even if it starts disabled.
-	if c.Scanning.ScanInterval != defaultScanInterval {
-		t.Errorf("scan_interval = %d, want clamped to %d", c.Scanning.ScanInterval, defaultScanInterval)
-	}
-}
-
 func TestNormalizeLeavesValidValuesAlone(t *testing.T) {
 	c := Default()
 
@@ -376,7 +199,7 @@ func TestNormalizeLeavesValidValuesAlone(t *testing.T) {
 	if len(notes) != 0 {
 		t.Errorf("expected no warnings for default config, got %v", notes)
 	}
-	if c.Scanning.ScanInterval != defaultScanInterval || c.Scanning.MinScanInterval != defaultMinScanInterval {
-		t.Error("Normalize changed already-valid values")
+	if c.Scanning.ScanInterval != defaultScanInterval {
+		t.Error("Normalize changed an already-valid value")
 	}
 }

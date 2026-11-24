@@ -8,11 +8,10 @@ MAC addresses and vendor information require elevated privileges to read the ARP
 
 ```bash
 # Linux/macOS
-sudo orangutan scan
 sudo orangutan serve
 
 # Windows - run Command Prompt as Administrator
-orangutan.exe scan
+orangutan.exe serve
 ```
 
 ## Service won't start
@@ -53,23 +52,17 @@ Or change the port in your config file.
    sudo nmap -sn 192.168.1.0/24
    ```
 
-3. **Check network detection:**
-   ```bash
-   orangutan status
-   ```
-
-4. **Scan a specific network:**
-   ```bash
-   sudo orangutan scan 192.168.1.0/24
-   ```
+3. **Check which networks Scout scans.** Scout scans the networks it detects, plus
+   `ORANGUTAN_NETWORKS`, minus `ORANGUTAN_EXCLUDE_NETWORKS`. It skips Tailscale
+   addresses (100.64.0.0/10) and single-address (/32) networks. A device must
+   answer two scans in a row to drop off the list, so a quiet device can take a
+   minute to disappear.
 
 ## Can't access web UI
 
 1. **Check if server is running:**
    ```bash
-   orangutan status
-   # or
-   curl http://localhost:291/
+   curl http://localhost:291/api/devices
    ```
 
 2. **Check firewall:**
@@ -92,30 +85,9 @@ Or change the port in your config file.
    This is the default. Scout has no authentication: only expose this port to
    a trusted network, or use an authenticated reverse proxy.
 
-## Tailscale not detected
-
-1. **Check Tailscale is installed and running:**
-   ```bash
-   tailscale status
-   ```
-
-2. **On macOS, ensure CLI is available:**
-   ```bash
-   # If using Tailscale app from App Store
-   /Applications/Tailscale.app/Contents/MacOS/Tailscale status
-   ```
-
-3. **Running in Docker?** The container cannot see the host's Tailscale CLI.
-   Run Scout natively for Tailscale peer discovery. Manage the host's connection
-   with Tailscale itself; Scout does not provide connect/disconnect controls.
-
-## Rate limiting errors
-
-If you see "Rate limited" errors when scanning, wait 30 seconds between scans. This prevents overloading your network.
-
 ## Data not persisting
 
-Check that the data directory exists and is writable:
+Scout only saves device names and icons, in `names.json`. Check that the data directory exists and is writable:
 
 ```bash
 # Linux
@@ -130,10 +102,6 @@ ls -la ~/Library/Application\ Support/lan-orangutan/
 ## View debug output
 
 ```bash
-# Run with verbose output
-orangutan scan -v
-
-# Check version
 orangutan version
 ```
 
@@ -143,5 +111,5 @@ orangutan version
 2. Open a new issue with:
    - Your OS and version
    - Output of `orangutan version`
-   - Output of `orangutan status`
+   - Output of `curl http://localhost:291/api/devices`
    - Steps to reproduce the problem
