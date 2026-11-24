@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { AlertTriangle, Radar, Search } from "lucide-react"
+import { AlertTriangle, Search } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
 import { DevicesTable } from "@/components/devices-table"
@@ -38,33 +38,17 @@ export default function App() {
   }, [])
 
   const count = data?.devices.length
-  const status: Status = list.isError ? "offline" : data?.scanning ? "scanning" : data ? "live" : "connecting"
 
   return (
     <div className="min-h-dvh">
-      <nav className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-7 items-center justify-center rounded-md bg-foreground text-background">
-              <Radar className="size-4" strokeWidth={2} aria-hidden="true" />
-            </span>
-            <span className="text-sm font-semibold tracking-tight">Scout</span>
-          </div>
-          <StatusPill status={status} />
-        </div>
-      </nav>
-
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-10 sm:px-6 sm:py-14">
         <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex flex-col gap-1.5">
-            <h1 className="font-display text-3xl sm:text-4xl">Devices</h1>
+            <h1 className="font-display text-3xl sm:text-4xl">Scout</h1>
             <p role="status" className="text-sm text-muted-foreground tabular-nums">
               {count === undefined
                 ? "Looking for devices on your network…"
-                : <>
-                    <span className="text-foreground">{count}</span> {count === 1 ? "device" : "devices"} online
-                    {list.dataUpdatedAt > 0 && <> · updated <UpdatedAgo at={list.dataUpdatedAt} /></>}
-                  </>}
+                : <><span className="text-foreground">{count}</span> {count === 1 ? "device" : "devices"} online</>}
             </p>
           </div>
           <div className="relative sm:w-72">
@@ -105,44 +89,4 @@ export default function App() {
       </main>
     </div>
   )
-}
-
-type Status = "live" | "scanning" | "offline" | "connecting"
-
-const statusStyle: Record<Status, { label: string; dot: string }> = {
-  live: { label: "Live", dot: "bg-success" },
-  scanning: { label: "Scanning", dot: "bg-info" },
-  offline: { label: "Offline", dot: "bg-destructive" },
-  connecting: { label: "Connecting", dot: "bg-muted-foreground" },
-}
-
-function StatusPill({ status }: { status: Status }) {
-  const { label, dot } = statusStyle[status]
-  const pulse = status === "live" || status === "scanning"
-  return (
-    <span className="inline-flex h-7 items-center gap-2 rounded-full border px-2.5 text-xs font-medium text-muted-foreground">
-      <span className="relative flex size-2">
-        {pulse && <span className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 motion-reduce:hidden ${dot}`} />}
-        <span className={`relative inline-flex size-2 rounded-full ${dot}`} />
-      </span>
-      {label}
-    </span>
-  )
-}
-
-// UpdatedAgo ticks on its own so the once-a-second clock does not re-render the table.
-function UpdatedAgo({ at }: { at: number }) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(id)
-  }, [])
-  return <>{ago(now - at)}</>
-}
-
-function ago(ms: number) {
-  const s = Math.max(0, Math.round(ms / 1000))
-  if (s < 5) return "just now"
-  if (s < 60) return `${s}s ago`
-  return `${Math.round(s / 60)}m ago`
 }
